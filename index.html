@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Logic Node v12.4: Paper Crunch Sound</title>
+    <style>
+        :root {
+            --bg: #1e1e1e;
+            --panel: #252526;
+            --accent: #007acc;
+            --text: #cccccc;
+            --red: #ff5555;
+            --blue: #55aaff;
+            --green: #50fa7b;
+            --yellow: #f1fa8c;
+            --purple: #bd93f9;
+            --gold: #ffd700;
+            --power: #00d2ff;
+            --cpu: #ff9900;
+        }
+        body {
+            margin: 0; background-color: var(--bg); color: var(--text);
+            font-family: 'Segoe UI', monospace; overflow: hidden;
+            display: flex; flex-direction: column; height: 100vh;
+            user-select: none;
+        }
+
+        /* 헤더 스타일 */
+        header {
+            height: 60px; background: var(--panel); border-bottom: 1px solid #333;
+            display: flex; align-items: center; padding: 0 25px;
+            justify-content: space-between; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 10;
+        }
+        .header-title { font-size: 1.3rem; font-weight: 800; color: white; letter-spacing: 1px; }
+        .header-info { display: flex; gap: 15px; align-items: center; }
+        
+        .stat-item {
+            font-family: 'Consolas', monospace; font-size: 0.95rem; 
+            color: #ccc; background: rgba(0,0,0,0.3); padding: 8px 15px; 
+            border-radius: 6px; border: 1px solid #444; display: flex; align-items: center;
+        }
+        .stat-label { color: #888; margin-right: 8px; font-size: 0.85em; font-weight: bold; }
+
+        /* 게이지 바 */
+        .power-meter-box { width: 120px; height: 8px; background: #111; border-radius: 4px; overflow: hidden; margin-left: 10px; }
+        .power-fill { height: 100%; background: linear-gradient(90deg, var(--power), #0077ff); width: 0%; transition: width 0.3s; }
+        
+        #funds-display { color: var(--gold); font-weight: bold; font-size: 1.1em; }
+        #cpu-display { color: var(--cpu); font-weight: bold; font-size: 1.1em; text-shadow: 0 0 5px rgba(255, 153, 0, 0.3); }
+
+        /* 메인 영역 */
+        #main { display: flex; flex: 1; }
+
+        /* 툴박스 */
+        #toolbox {
+            width: 260px; background: #2d2d30; border-right: 1px solid #333;
+            padding: 15px; display: flex; flex-direction: column; gap: 12px;
+            z-index: 5; overflow-y: auto;
+        }
+        .node-item {
+            background: #3e3e42; padding: 12px; border-radius: 8px;
+            cursor: pointer; border: 1px solid #555; transition: all 0.2s ease;
+            position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .node-item:hover { background: #505050; border-color: var(--power); transform: translateX(5px); }
+        .node-name { font-weight: bold; color: #fff; font-size: 0.95rem; }
+        .node-desc { display: block; color: #bbb; font-size: 0.75em; margin-top: 4px; }
+        .node-meta { display: flex; justify-content: flex-end; margin-top: 8px; font-size: 0.9em; font-weight: bold; }
+        .node-tag { position: absolute; top: 10px; right: 10px; font-size: 0.65em; padding: 2px 6px; border-radius: 4px; background: #555; color: #fff; }
+        .tag-ai { background: var(--purple); color: #222; }
+
+        /* 캔버스 */
+        #canvas-container {
+            flex: 1; position: relative; background-color: #222;
+            background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px; overflow: hidden;
+        }
+        canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+        /* 컨트롤 및 UI */
+        #controls { position: absolute; bottom: 30px; right: 30px; display: flex; gap: 10px; }
+        .action-btn {
+            background: var(--accent); color: white; border: none; padding: 12px 24px;
+            font-size: 1rem; cursor: pointer; border-radius: 6px; font-weight: bold;
+            transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .action-btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        .btn-stop { background: var(--red); }
+        .btn-retry { background: #4caf50; }
+        .btn-clear { background: #444; }
+        .btn-store { background: var(--gold); color: #222; }
+
+        #toast {
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 68, 68, 0.9); color: white; padding: 10px 20px;
+            border-radius: 20px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100;
+        }
+
+        /* 모달 공통 */
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
+            z-index: 100; backdrop-filter: blur(5px); display: none;
+        }
+        .modal-content {
+            background: #252526; border: 1px solid #555; padding: 40px;
+            border-radius: 12px; max-width: 500px; text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+        }
+        .modal-title { font-size: 1.8rem; margin: 0 0 20px 0; color: white; }
+        .modal-text { font-size: 1rem; line-height: 1.6; color: #ddd; margin-bottom: 30px; text-align: left; }
+        .highlight { color: var(--yellow); font-weight: bold; background: rgba(255,255,0,0.1); padding: 0 4px; }
+
+        /* 상점 */
+        #store-modal .modal-content { border: 2px solid var(--gold); width: 450px; }
+        .upgrade-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: #333; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #444; text-align: left;
+        }
+        .up-btn { background: var(--gold); color: #222; border: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .up-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-title">LOGIC NODE v12.4</div>
+    <div class="header-info">
+        <div class="stat-item" style="border-color: var(--gold);">
+            <span class="stat-label">MONEY</span>$<span id="funds-display">0</span>
+        </div>
+        <div class="stat-item" style="border-color: var(--cpu);">
+            <span class="stat-label">CPU CLOCK</span><span id="cpu-display">1.0 GHz</span>
+        </div>
+        <div class="stat-item" style="border-color: var(--power);">
+            <span class="stat-label">POWER</span>
+            <div class="power-meter-box"><div class="power-fill" id="power-bar"></div></div>
+            <span style="font-size:0.8em; margin-left:8px; font-weight:bold; color:var(--power)">
+                <span id="power-current">0</span>/<span id="power-max">50</span>W
+            </span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">GOAL</span><span id="goal-status" style="color:white; font-weight:bold;">...</span>
+        </div>
+    </div>
+</header>
+
+<div id="toast">알림</div>
+
+<!-- 상점 -->
+<div id="store-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div style="text-align:right; margin-bottom:-20px;"><span onclick="game.closeStore()" style="cursor:pointer; color:#aaa; font-size:1.5rem;">✕</span></div>
+        <h2 style="color:var(--gold); margin-top:0;">🛠️ Hardware Store</h2>
+        <div class="upgrade-item">
+            <div><h4 style="margin:0; color:white">Power Supply</h4><p style="margin:0; font-size:0.8em; color:#aaa">+30 Max Power</p></div>
+            <button class="up-btn" id="btn-up-power" onclick="game.buyUpgrade('POWER')">$200</button>
+        </div>
+        <div class="upgrade-item">
+            <div><h4 style="margin:0; color:white">Overclocking</h4><p style="margin:0; font-size:0.8em; color:#aaa">+0.2 GHz CPU Clock</p></div>
+            <button class="up-btn" id="btn-up-speed" onclick="game.buyUpgrade('SPEED')">$300</button>
+        </div>
+    </div>
+</div>
+
+<div id="main">
+    <div id="toolbox">
+        <!-- 노드 목록 JS 생성 -->
+    </div>
+    
+    <div id="canvas-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="controls">
+            <button class="action-btn btn-store" onclick="game.openStore()">🛒 상점</button>
+            <button class="action-btn btn-clear" onclick="game.resetLevel()">🗑️ 초기화</button>
+            <button class="action-btn btn-retry" onclick="game.retrySim()">↺ 재시도</button>
+            <button class="action-btn" onclick="game.toggleRun()" id="run-btn">▶ 실행</button>
+        </div>
+        
+        <!-- 미션 브리핑 -->
+        <div id="mission-modal" class="modal-overlay" style="display:flex;">
+            <div class="modal-content">
+                <h2 class="modal-title" id="m-title">Level 1</h2>
+                <div class="modal-text" id="m-desc">로딩 중...</div>
+                <button class="action-btn" onclick="game.closeModal()">설계 시작</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * 🔊 오디오 시스템
+ */
+const AudioSys = {
+    ctx: null,
+    noiseBuffer: null,
+    init() { 
+        if (!this.ctx) { 
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
+            // 백색 소음 버퍼 생성
+            const bufferSize = this.ctx.sampleRate * 0.5; 
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            this.noiseBuffer = buffer;
+        } 
+        if (this.ctx.state === 'suspended') { this.ctx.resume(); } 
+    },
+    playTone(type) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        
+        if (type === 'trash') { 
+            // 🗑️ 휴지통 사운드: 종이 구기는 소리 (바스락)
+            if (this.noiseBuffer) {
+                const src = this.ctx.createBufferSource();
+                src.buffer = this.noiseBuffer;
+                // 재생 속도를 랜덤하게 하여 매번 다른 구김 소리
+                src.playbackRate.value = 0.8 + Math.random() * 0.4;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass'; // 대역 통과 (바스락 거리는 대역)
+                filter.frequency.value = 1000 + Math.random() * 500; 
+                filter.Q.value = 0.5;
+
+                const gain = this.ctx.createGain();
+                // 짧고 강렬한 바스락
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(1.5, now + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                
+                src.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                
+                src.start(now);
+                src.stop(now + 0.3);
+            }
+            // 타격음(쿵)은 제거됨
+            
+        } else if (type === 'spawn') {
+            const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+            gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(now); osc.stop(now + 0.1);
+        } else if (type === 'success') {
+            const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.type = 'square'; osc.frequency.setValueAtTime(1200, now); osc.frequency.setValueAtTime(1600, now + 0.1);
+            gain.gain.setValueAtTime(0.05, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+            osc.start(now); osc.stop(now + 0.3);
+        } else if (type === 'fail') {
+            const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.type = 'sawtooth'; 
+            osc.frequency.setValueAtTime(100, now); osc.frequency.linearRampToValueAtTime(50, now + 0.5);
+            gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+            osc.start(now); osc.stop(now + 0.5);
+        } else if (type === 'click') {
+            const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(800, now);
+            gain.gain.setValueAtTime(0.05, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+            osc.start(now); osc.stop(now + 0.05);
+        } else if (type === 'clear') {
+            this.playNote(523.25, now, 0.1); this.playNote(659.25, now+0.1, 0.1); this.playNote(783.99, now+0.2, 0.2); this.playNote(1046.50, now+0.3, 0.4);
+        }
+    },
+    playNote(freq, time, dur) {
+        const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.frequency.value = freq; gain.gain.setValueAtTime(0.1, time); gain.gain.exponentialRampToValueAtTime(0.01, time+dur);
+        osc.start(time); osc.stop(time+dur);
+    }
+};
+
+/**
+ * 🛠️ 게임 데이터
+ */
+const COLORS = { RED:'#ff5555', BLUE:'#55aaff', GREEN:'#50fa7b', YELLOW:'#f1fa8c' };
+const SHAPES = { CIRCLE:0, SQUARE:1, TRIANGLE:2 };
+
+// 🛠️ 노드 정의: cost 제거됨
+const NODE_TYPES = {
+    FILTER: { name: "Color Filter", desc: "색상 분류", power: 5, tag: "Basic" },
+    SHAPE_SORTER: { name: "Shape Sorter", desc: "모양 분류", power: 8, tag: "Shape" },
+    PERCEPTRON: { name: "Perceptron AI", desc: "학습형 분류기", power: 15, tag: "AI" },
+    BALANCER: { name: "Balancer", desc: "부하 분산", power: 3, tag: "Util" },
+    TRASH: { name: "Trash", desc: "데이터 삭제", power: 1, tag: "Util" }
+};
+
+const UPGRADE_COSTS = { POWER: 200, SPEED: 300 };
+
+const LEVELS = [
+    {
+        id: 1, title: "데이터 정제의 기초", grant: 0, power: 50, reward: 10,
+        desc: "<strong>목표:</strong> 네모(Square) 5개 수집.<br>노드 배치는 <strong>무료</strong>입니다. 전력(Power) 한도 내에서 설계하세요.<br>서버가 원하지 않는 데이터가 들어가면 <strong>작전 실패</strong>입니다.",
+        preset: [
+            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'RED', shape:'CIRCLE', count:5}, {color:'BLUE', shape:'SQUARE', count:5}] } },
+            { type: 'OUTPUT', x: 700, y: 200, props: { acceptShape: 'SQUARE', targetCount: 5 } }
+        ]
+    },
+    {
+        id: 2, title: "형상 인식 프로토콜", grant: 100, power: 55, reward: 12,
+        desc: "<strong>목표:</strong> 파란색 네모 10개 수집.<br>이번엔 색상이 모두 파란색이지만 모양이 다릅니다.<br><strong>Shape Sorter</strong>를 사용하여 네모만 골라내세요.",
+        preset: [
+            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:10}, {color:'BLUE', shape:'SQUARE', count:10}] } },
+            { type: 'OUTPUT', x: 700, y: 300, props: { acceptShape: 'SQUARE', targetCount: 10 } }
+        ]
+    },
+    {
+        id: 3, title: "부하 분산 처리", grant: 150, power: 60, reward: 15,
+        desc: "<strong>목표:</strong> 두 서버에 데이터 10개씩 분배.<br>단일 라인으로는 처리량이 부족할 수 있습니다.<br><strong>Balancer</strong>로 트래픽을 정확히 50:50으로 나누세요.",
+        preset: [
+            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'RED', shape:'CIRCLE', count:20}] } },
+            { type: 'OUTPUT', x: 700, y: 200, props: { acceptColor: 'RED', targetCount: 10 } },
+            { type: 'OUTPUT', x: 700, y: 400, props: { acceptColor: 'RED', targetCount: 10 } }
+        ]
+    },
+    {
+        id: 4, title: "오염된 데이터", grant: 0, power: 70, reward: 18,
+        desc: "<strong>목표:</strong> 초록색 삼각형 10개 수집.<br>데이터에 '노이즈(Noise)'가 섞여 있습니다.<br>필요 없는 데이터는 반드시 <strong>Trash</strong>로 보내 제거해야 시스템이 막히지 않습니다.",
+        preset: [
+            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'GREEN', shape:'TRIANGLE', count:10}, {color:'RED', shape:'SQUARE', count:10}, {color:'BLUE', shape:'CIRCLE', count:5}] } },
+            { type: 'OUTPUT', x: 700, y: 250, props: { acceptColor: 'GREEN', targetCount: 10 } }
+        ]
+    },
+    {
+        id: 5, title: "머신러닝의 시작", grant: 200, power: 80, reward: 20,
+        desc: "<strong>목표:</strong> 파란색 데이터 분류 (AI 활용).<br>복잡한 패턴이 감지됩니다. <strong>Perceptron AI</strong>를 사용해보세요.<br>처음엔 실수하지만 데이터를 처리할수록 정확도가 100%에 도달합니다.",
+        preset: [
+            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:15}, {color:'RED', shape:'TRIANGLE', count:15}] } },
+            { type: 'OUTPUT', x: 750, y: 300, props: { acceptColor: 'BLUE', targetCount: 15 } }
+        ]
+    },
+    {
+        id: 6, title: "멀티 스트림 병합", grant: 0, power: 90, reward: 25,
+        desc: "<strong>목표:</strong> 빨간색은 A서버, 파란색은 B서버로.<br>두 개의 제너레이터에서 데이터가 쏟아집니다.<br>각 라인을 합치거나 교차시켜 올바른 목적지로 보내세요.",
+        preset: [
+            { type: 'SOURCE', x: 80, y: 150, props: { spawnList: [{color:'RED', shape:'SQUARE', count:10}, {color:'BLUE', shape:'CIRCLE', count:5}] } },
+            { type: 'SOURCE', x: 80, y: 450, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:10}, {color:'RED', shape:'SQUARE', count:5}] } },
+            { type: 'OUTPUT', x: 800, y: 150, props: { acceptColor: 'RED', targetCount: 15 } },
+            { type: 'OUTPUT', x: 800, y: 450, props: { acceptColor: 'BLUE', targetCount: 15 } }
+        ]
+    },
+    {
+        id: 7, title: "고속 처리 아키텍처", grant: 300, power: 100, reward: 30,
+        desc: "<strong>목표:</strong> 대량 데이터 처리.<br>데이터 유입 속도가 매우 빠릅니다. 수익을 재투자하여<br>상점에서 <strong>CPU Overclocking</strong>을 업그레이드해야 원활한 처리가 가능합니다.",
+        preset: [
+            { type: 'SOURCE', x: 50, y: 300, props: { spawnList: [{color:'GREEN', shape:'SQUARE', count:40}] } },
+            { type: 'OUTPUT', x: 800, y: 200, props: { acceptColor: 'GREEN', targetCount: 20 } },
+            { type: 'OUTPUT', x: 800, y: 400, props: { acceptColor: 'GREEN', targetCount: 20 } }
+        ]
+    },
+    {
+        id: 8, title: "마스터 아키텍트", grant: 0, power: 120, reward: 50,
+        desc: "<strong>최종 목표:</strong> 모든 데이터 완벽 분류.<br>모든 종류의 데이터가 섞여 나옵니다.<br>지금까지 배운 모든 기술을 활용하여 완벽한 파이프라인을 구축하세요.",
+        preset: [
+            { type: 'SOURCE', x: 50, y: 300, props: { spawnList: [
+                {color:'RED', shape:'SQUARE', count:10}, 
+                {color:'BLUE', shape:'CIRCLE', count:10}, 
+                {color:'GREEN', shape:'TRIANGLE', count:10}
+            ] } },
+            { type: 'OUTPUT', x: 850, y: 100, props: { acceptShape: 'SQUARE', targetCount: 10 } },
+            { type: 'OUTPUT', x: 850, y: 300, props: { acceptShape: 'CIRCLE', targetCount: 10 } },
+            { type: 'OUTPUT', x: 850, y: 500, props: { acceptShape: 'TRIANGLE', targetCount: 10 } }
+        ]
+    }
+];
+
+class Packet {
+    constructor(color, shape, start, end, outIdx, inIdx) {
+        this.colorKey = color; this.color = COLORS[color]; this.shape = shape;
+        this.start = start; this.end = end; this.outIdx = outIdx; this.inIdx = inIdx;
+        this.t = 0;
+        let baseSpeed = 0.015;
+        if(shape === 'TRIANGLE') baseSpeed *= 1.5;
+        if(shape === 'SQUARE') baseSpeed *= 0.8;
+        this.baseSpeed = baseSpeed;
+        this.arrived = false;
+    }
+    update(mult) {
+        this.t += this.baseSpeed * mult;
+        if(this.t >= 1) { this.t = 1; this.arrived = true; }
+    }
+    draw(ctx) {
+        const sx = this.start.getOutPos(this.outIdx).x;
+        const sy = this.start.getOutPos(this.outIdx).y;
+        const ex = this.end.getInPos(this.inIdx).x;
+        const ey = this.end.getInPos(this.inIdx).y;
+        const dist = Math.abs(ex-sx); const cp1x = sx+dist*0.5; const cp2x = ex-dist*0.5;
+        const t = this.t; const invT = 1-t;
+        const x = Math.pow(invT,3)*sx + 3*Math.pow(invT,2)*t*cp1x + 3*invT*Math.pow(t,2)*cp2x + Math.pow(t,3)*ex;
+        const y = Math.pow(invT,3)*sy + 3*Math.pow(invT,2)*t*sy + 3*invT*Math.pow(t,2)*ey + Math.pow(t,3)*ey;
+
+        ctx.fillStyle = this.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        if(game.speedMultiplier > 1.2) {
+            ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.arc(x-(x-sx)*0.05, y-(y-sy)*0.05, 5, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1.0;
+        }
+        ctx.beginPath();
+        if(this.shape === 'SQUARE') ctx.rect(x-6, y-6, 12, 12);
+        else if(this.shape === 'TRIANGLE') { ctx.moveTo(x, y-6); ctx.lineTo(x+6, y+6); ctx.lineTo(x-6, y+6); ctx.closePath(); }
+        else ctx.arc(x, y, 6, 0, Math.PI*2);
+        ctx.fill(); ctx.stroke();
+    }
+}
+
+class Node {
+    constructor(type, x, y) {
+        this.type = type; this.x = x; this.y = y;
+        this.w = 160; this.h = 80;
+        this.inputs = []; this.outputs = [];
+        this.props = {}; this.state = { accuracy: 0.5, trained: 0, toggle: 0 };
+        this.queue = []; this.collectedCount = 0;
+        
+        const t = NODE_TYPES[type] || {name: "Unknown", color: "#333"};
+        this.name = type === 'SOURCE' ? "Generator" : (type === 'OUTPUT' ? "Server" : t.name);
+        this.color = type === 'SOURCE' ? "#444" : (type === 'OUTPUT' ? "#222" : "#333");
+        if(type === 'PERCEPTRON') this.color = "#4a3b69";
+        
+        if(type === 'SOURCE') { this.outputs = [null]; this.props.spawnList = []; }
+        else if(type === 'OUTPUT') { this.inputs = [0]; this.props.targetCount = 0; }
+        else {
+            this.inputs = [0]; 
+            this.outputs = (type === 'TRASH') ? [] : [null, null];
+            if(type === 'FILTER') this.props.filterColor = 'RED';
+            if(type === 'SHAPE_SORTER') this.props.targetShape = 'SQUARE';
+            if(type === 'PERCEPTRON') this.props.targetColor = 'BLUE';
+        }
+    }
+
+    getInPos(idx) { return { x: this.x, y: this.y + (this.h/(this.inputs.length+1))*(idx+1) }; }
+    getOutPos(idx) { return { x: this.x + this.w, y: this.y + (this.h/(this.outputs.length+1))*(idx+1) }; }
+
+    receive(p) {
+        if(this.type === 'OUTPUT') game.checkGoal(this, p);
+        else if(this.type !== 'TRASH') this.process(p);
+        else AudioSys.playTone('trash'); 
+    }
+
+    process(p) {
+        let outPort = 0;
+        if(['FILTER','SHAPE_SORTER','PERCEPTRON'].includes(this.type)) {
+            game.spawnParticles(this.x + this.w/2, this.y + this.h/2, COLORS[p.colorKey], 3);
+        }
+
+        if(this.type === 'SOURCE') outPort = 0;
+        else if(this.type === 'FILTER') outPort = (p.colorKey === this.props.filterColor) ? 0 : 1;
+        else if(this.type === 'SHAPE_SORTER') outPort = (p.shape === this.props.targetShape) ? 0 : 1;
+        else if(this.type === 'BALANCER') { outPort = this.state.toggle; this.state.toggle ^= 1; }
+        else if(this.type === 'PERCEPTRON') {
+            const isMatch = (p.colorKey === this.props.targetColor);
+            const correct = isMatch ? 0 : 1;
+            if(this.state.accuracy < 1.0) this.state.accuracy += 0.05;
+            if(Math.random() < this.state.accuracy) outPort = correct;
+            else { outPort = correct === 0 ? 1 : 0; game.addEffect(this.x+this.w/2, this.y, "ERROR", "#f00"); }
+        }
+
+        if(this.outputs[outPort]) {
+            game.packets.push(new Packet(p.colorKey, p.shape, this, this.outputs[outPort].node, outPort, this.outputs[outPort].inIdx));
+        }
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = this.color; ctx.strokeStyle = (game.selectedNode===this)?'#fff':'#555'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.roundRect(this.x, this.y, this.w, this.h, 10); ctx.fill(); ctx.stroke();
+        
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Segoe UI'; ctx.textAlign = 'center';
+        ctx.fillText(this.name, this.x + this.w/2, this.y + 20);
+
+        const power = NODE_TYPES[this.type] ? NODE_TYPES[this.type].power : 0;
+        if(power > 0) {
+            ctx.fillStyle = 'var(--power)'; ctx.font = 'bold 11px Consolas';
+            ctx.fillText(`⚡${power}W`, this.x+this.w-25, this.y+15);
+        }
+
+        if(this.type === 'SOURCE' && this.props.spawnList) {
+            const counts = {};
+            const data = (game.isRunning && this.queue.length>0) ? this.queue : this.createQueue();
+            data.forEach(p => { const k=`${p.color}-${p.shape}`; if(!counts[k]) counts[k]={c:p.color, s:p.shape, n:0}; counts[k].n++; });
+            
+            let idx = 0; const w = 35; const sx = this.x + this.w/2 - (Object.keys(counts).length*w)/2 + w/2;
+            for(let k in counts) {
+                drawIcon(ctx, sx+idx*w, this.y+45, 12, counts[k].s, COLORS[counts[k].c]);
+                ctx.fillStyle='#fff'; ctx.font='11px Consolas'; ctx.fillText(`x${counts[k].n}`, sx+idx*w, this.y+60);
+                idx++;
+            }
+        } else if(this.type === 'OUTPUT') {
+            if(this.props.acceptColor) drawIcon(ctx, this.x+this.w/2, this.y+45, 16, 'CIRCLE', COLORS[this.props.acceptColor]);
+            else if(this.props.acceptShape) drawIcon(ctx, this.x+this.w/2, this.y+45, 16, this.props.acceptShape, '#aaa');
+            
+            ctx.fillStyle = this.collectedCount >= this.props.targetCount ? '#50fa7b' : '#fff';
+            ctx.font = 'bold 12px Segoe UI';
+            ctx.fillText(`${this.collectedCount}/${this.props.targetCount}`, this.x+this.w/2, this.y+32);
+        } else {
+            ctx.fillStyle = '#aaa'; ctx.font = '10px Segoe UI';
+            let info = "";
+            if(this.type === 'FILTER') info = `Filter: ${this.props.filterColor}`;
+            if(this.type === 'SHAPE_SORTER') info = `Sort: ${this.props.targetShape}`;
+            if(this.type === 'PERCEPTRON') {
+                const w=80, h=4; ctx.fillStyle='#222'; ctx.fillRect(this.x+(this.w-w)/2, this.y+45, w, h);
+                ctx.fillStyle='#0f0'; ctx.fillRect(this.x+(this.w-w)/2, this.y+45, w*this.state.accuracy, h);
+                info = `Acc: ${Math.floor(this.state.accuracy*100)}%`; ctx.fillStyle='#fff';
+            }
+            if(info) ctx.fillText(info, this.x+this.w/2, this.y+35);
+        }
+
+        const r=5;
+        this.inputs.forEach((_,i)=>{ const p=this.getInPos(i); ctx.fillStyle='#999'; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill(); });
+        this.outputs.forEach((l,i)=>{ const p=this.getOutPos(i); ctx.fillStyle=l?'#fff':'#555'; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill(); });
+    }
+
+    createQueue() {
+        let q=[];
+        if(this.props.spawnList) this.props.spawnList.forEach(i => { for(let k=0; k<i.count; k++) q.push({color:i.color, shape:i.shape}); });
+        return q;
+    }
+}
+
+function drawIcon(ctx, x, y, size, shape, color) {
+    ctx.fillStyle = color; ctx.beginPath();
+    if(shape==='SQUARE'||shape===1) ctx.rect(x-size/2, y-size/2, size, size);
+    else if(shape==='TRIANGLE'||shape===2) { ctx.moveTo(x, y-size/2); ctx.lineTo(x+size/2, y+size/2); ctx.lineTo(x-size/2, y+size/2); }
+    else ctx.arc(x, y, size/2, 0, Math.PI*2);
+    ctx.fill();
+}
+
+/**
+ * 🎮 메인 게임 로직
+ */
+const game = {
+    canvas: document.getElementById('gameCanvas'),
+    ctx: null,
+    nodes: [], packets: [], effects: [], particles: [],
+    level: 0, isRunning: false,
+    money: 0, levelStartMoney: 0, maxPower: 50, currentPower: 0, speedMultiplier: 1.0,
+    collected: {}, mouse: {x:0, y:0}, wireStart: null,
+
+    init() {
+        this.ctx = this.canvas.getContext('2d');
+        this.initToolbox();
+        window.onresize = () => this.resize(); this.resize();
+        this.setupInput();
+        this.loadLevel(1);
+        this.loop();
+    },
+
+    initToolbox() {
+        const tb = document.getElementById('toolbox');
+        for(let type in NODE_TYPES) {
+            const data = NODE_TYPES[type];
+            if(['SOURCE','OUTPUT'].includes(type)) continue;
+            const div = document.createElement('div');
+            div.className = 'node-item';
+            div.innerHTML = `
+                <span class="node-tag ${data.tag==='AI'?'tag-ai':'tag-basic'}">${data.tag}</span>
+                <span class="node-name">${data.name}</span>
+                <span class="node-desc">${data.desc}</span>
+                <div class="node-meta">
+                    <span style="color:var(--power)">⚡${data.power}W</span>
+                </div>`;
+            div.onclick = () => this.addNode(type);
+            tb.appendChild(div);
+        }
+    },
+
+    resize() { this.canvas.width = this.canvas.parentElement.offsetWidth; this.canvas.height = this.canvas.parentElement.offsetHeight; },
+
+    loadLevel(id) {
+        this.level = id;
+        const data = LEVELS.find(l => l.id === id);
+        this.clearAll();
+        
+        document.getElementById('m-title').innerText = `Level ${id}: ${data.title}`;
+        document.getElementById('m-desc').innerHTML = data.desc;
+        document.getElementById('mission-modal').style.display = 'flex';
+
+        if(id === 1) { this.money = 0; this.maxPower = 50; this.speedMultiplier = 1.0; }
+        else if(data.power) this.maxPower = Math.max(this.maxPower, data.power);
+        
+        if(data.grant) this.money += data.grant;
+        this.levelStartMoney = this.money;
+
+        data.preset.forEach(p => {
+            const n = new Node(p.type, p.x, p.y);
+            if(p.props) Object.assign(n.props, p.props);
+            this.nodes.push(n);
+        });
+        this.updateUI();
+    },
+
+    clearAll() {
+        this.stopSim();
+        this.nodes = []; this.packets = []; this.particles = []; this.effects = [];
+    },
+
+    retrySim() {
+        this.stopSim();
+        this.packets = []; this.particles = []; this.effects = [];
+        this.money = this.levelStartMoney; 
+        this.nodes.forEach(n => {
+            n.collectedCount = 0;
+            if(n.type === 'SOURCE') {
+                n.queue = n.createQueue();
+                for(let i=n.queue.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [n.queue[i], n.queue[j]] = [n.queue[j], n.queue[i]]; }
+            }
+        });
+        this.updateUI();
+        this.showToast("시뮬레이션 재시작 (자금 복구됨)");
+    },
+
+    resetLevel() { if(confirm("초기화 하시겠습니까?")) this.loadLevel(this.level); },
+
+    toggleRun() {
+        if(this.isRunning) this.stopSim();
+        else {
+            AudioSys.init();
+            this.nodes.filter(n=>n.type==='SOURCE').forEach(n => {
+                if(!n.queue || n.queue.length===0) {
+                    n.queue = n.createQueue();
+                    for(let i=n.queue.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [n.queue[i], n.queue[j]] = [n.queue[j], n.queue[i]]; }
+                }
+            });
+
+            this.isRunning = true;
+            document.getElementById('run-btn').innerText = "⏹ 정지";
+            document.getElementById('run-btn').classList.add('btn-stop');
+            
+            this.genTimer = setInterval(() => {
+                let active = false;
+                this.nodes.filter(n=>n.type==='SOURCE').forEach(s => {
+                    if(s.queue.length > 0) {
+                        active = true;
+                        const item = s.queue.shift();
+                        s.process({colorKey:item.color, shape:item.shape});
+                        AudioSys.playTone('spawn'); 
+                    }
+                });
+                if(!active && this.packets.length === 0) {
+                    clearInterval(this.genTimer);
+                    setTimeout(() => this.checkResult(), 1500);
+                }
+            }, 800 / this.speedMultiplier);
+        }
+    },
+
+    stopSim() {
+        this.isRunning = false; clearInterval(this.genTimer);
+        const btn = document.getElementById('run-btn');
+        btn.innerText = "▶ 실행"; btn.classList.remove('btn-stop');
+    },
+
+    checkResult() {
+        if (!this.isRunning) return;
+        let win = true;
+        this.nodes.filter(n=>n.type==='OUTPUT').forEach(n => {
+            if(n.collectedCount < n.props.targetCount) win = false;
+        });
+        if(!win) {
+            AudioSys.playTone('fail');
+            alert("❌ 작전 실패: 목표 수량 미달");
+            this.stopSim();
+        }
+    },
+
+    checkGoal(node, p) {
+        let ok = true;
+        if(node.props.acceptColor && node.props.acceptColor !== p.colorKey) ok = false;
+        if(node.props.acceptShape && node.props.acceptShape !== p.shape) ok = false;
+
+        if(ok) {
+            node.collectedCount++;
+            AudioSys.playTone('success'); 
+            const reward = LEVELS.find(l=>l.id===this.level).reward;
+            this.money += reward;
+            this.addEffect(node.x, node.y-20, `+$${reward}`, "#ffd700");
+            
+            for(let i=0; i<5; i++) this.particles.push(new Particle(node.x+node.w/2, node.y+node.h/2, "#ffd700"));
+
+            this.updateUI();
+            
+            const outputs = this.nodes.filter(n=>n.type==='OUTPUT');
+            if(outputs.every(n => n.collectedCount >= n.props.targetCount)) {
+                setTimeout(() => {
+                    AudioSys.playTone('clear'); 
+                    alert("🎉 LEVEL CLEAR!");
+                    if(this.level < LEVELS.length) this.loadLevel(this.level+1);
+                    else alert("🏆 ALL LEVELS COMPLETED!");
+                }, 500);
+            }
+        } else {
+            AudioSys.playTone('fail');
+            this.addEffect(node.x, node.y-20, "FATAL ERROR", "#f00");
+            this.spawnParticles(node.x + node.w/2, node.y + node.h/2, "#f00", 10);
+            this.stopSim();
+            setTimeout(() => { alert("❌ 작전 실패: 서버에 잘못된 데이터 유입!"); }, 50);
+        }
+    },
+    
+    spawnParticles(x, y, color, count) {
+        for(let i=0; i<count; i++) this.particles.push(new Particle(x, y, color));
+    },
+
+    addNode(type) {
+        if(this.isRunning) return;
+        AudioSys.init(); 
+        const conf = NODE_TYPES[type];
+        if(this.currentPower + conf.power > this.maxPower) { this.showToast("전력 부족!"); return; }
+        
+        this.nodes.push(new Node(type, 200, 200));
+        AudioSys.playTone('click');
+        this.updateUI();
+    },
+
+    sellNode(n) {
+        if(n.type==='SOURCE' || n.type==='OUTPUT') return;
+        this.nodes = this.nodes.filter(x => x !== n);
+        this.nodes.forEach(x => x.outputs = x.outputs.map(l => (l && l.node===n) ? null : l));
+        AudioSys.playTone('click');
+        this.updateUI();
+    },
+
+    updateUI() {
+        let totalW = 0; this.nodes.forEach(n => {
+            if(NODE_TYPES[n.type]) totalW += NODE_TYPES[n.type].power;
+        });
+        this.currentPower = totalW;
+        
+        document.getElementById('funds-display').innerText = this.money;
+        document.getElementById('power-current').innerText = this.currentPower;
+        document.getElementById('power-max').innerText = this.maxPower;
+        document.getElementById('cpu-display').innerText = `${this.speedMultiplier.toFixed(1)} GHz`;
+        
+        const pct = Math.min(100, (this.currentPower/this.maxPower)*100);
+        document.getElementById('power-bar').style.width = pct+'%';
+        document.getElementById('power-bar').style.background = pct>90?'#f44': 'linear-gradient(90deg, var(--power), #0077ff)';
+        
+        let cleared = this.nodes.filter(n=>n.type==='OUTPUT' && n.collectedCount >= n.props.targetCount).length;
+        let total = this.nodes.filter(n=>n.type==='OUTPUT').length;
+        document.getElementById('goal-status').innerText = `${cleared}/${total} Servers Ready`;
+    },
+
+    openStore() { document.getElementById('store-modal').style.display='block'; this.updateStoreBtn(); },
+    closeStore() { document.getElementById('store-modal').style.display='none'; },
+    updateStoreBtn() {
+        document.getElementById('btn-up-power').disabled = this.money < UPGRADE_COSTS.POWER;
+        document.getElementById('btn-up-speed').disabled = this.money < UPGRADE_COSTS.SPEED;
+    },
+    buyUpgrade(type) {
+        if(type==='POWER' && this.money >= UPGRADE_COSTS.POWER) {
+            this.money -= UPGRADE_COSTS.POWER; this.maxPower += 30;
+            this.addEffect(this.canvas.width/2, this.canvas.height/2, "MAX POWER UP!", "#00d2ff");
+        } else if(type==='SPEED' && this.money >= UPGRADE_COSTS.SPEED) {
+            this.money -= UPGRADE_COSTS.SPEED; this.speedMultiplier += 0.2;
+            this.addEffect(this.canvas.width/2, this.canvas.height/2, "CPU BOOST!", "#ff9900");
+        }
+        AudioSys.playTone('success');
+        this.updateUI(); this.updateStoreBtn();
+    },
+    
+    addEffect(x, y, t, c) { this.effects.push({x,y,text:t,color:c,life:60}); },
+    showToast(msg) {
+        const t = document.getElementById('toast'); t.innerText=msg; t.style.opacity=1; t.style.top="90px";
+        setTimeout(()=> { t.style.opacity=0; t.style.top="80px"; }, 1500);
+    },
+    closeModal() { document.getElementById('mission-modal').style.display='none'; AudioSys.init(); },
+
+    loop() {
+        this.update(); this.draw(); requestAnimationFrame(() => this.loop());
+    },
+    update() {
+        if(this.isRunning) {
+            this.packets.forEach(p => p.update(this.speedMultiplier));
+            this.packets.filter(p=>p.arrived).forEach(p => p.end.receive(p));
+            this.packets = this.packets.filter(p=>!p.arrived);
+        }
+        this.effects.forEach(e => {e.y-=0.5; e.life--;}); this.effects = this.effects.filter(e=>e.life>0);
+        this.particles.forEach(p => {p.x+=p.vx; p.y+=p.vy; p.life--; p.size*=0.95;}); this.particles = this.particles.filter(p=>p.life>0);
+    },
+    draw() {
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        this.nodes.forEach(n => {
+            n.outputs.forEach((l,i) => {
+                if(l) {
+                    const s = n.getOutPos(i); const e = l.node.getInPos(l.inIdx);
+                    ctx.beginPath(); ctx.moveTo(s.x, s.y);
+                    const cp1x = s.x + Math.abs(e.x-s.x)*0.5;
+                    ctx.bezierCurveTo(cp1x, s.y, cp1x, e.y, e.x, e.y);
+                    ctx.strokeStyle='#555'; ctx.lineWidth=3; ctx.stroke();
+                }
+            });
+        });
+        if(this.wireStart) {
+            const s=this.wireStart.node.getOutPos(this.wireStart.idx);
+            ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(this.mouse.x,this.mouse.y);
+            ctx.strokeStyle='#fff'; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+        }
+
+        this.nodes.forEach(n => n.draw(ctx));
+        this.packets.forEach(p => p.draw(ctx));
+        
+        this.particles.forEach(p => {
+            ctx.globalAlpha = p.life/p.maxLife; ctx.fillStyle=p.color; 
+            ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1.0;
+        });
+        
+        this.effects.forEach(e => {
+            ctx.globalAlpha = e.life/60; ctx.fillStyle=e.color; ctx.font='bold 14px Consolas';
+            ctx.fillText(e.text, e.x, e.y); ctx.globalAlpha=1.0;
+        });
+    },
+
+    setupInput() {
+        const cvs = this.canvas;
+        let dragNode = null;
+
+        cvs.addEventListener('mousedown', e => {
+            if(e.button !== 0) return;
+            if(this.isRunning) return;
+            const mx=e.offsetX, my=e.offsetY;
+            AudioSys.init(); 
+
+            for(let n of this.nodes) {
+                for(let i=0; i<n.outputs.length; i++) {
+                    const p = n.getOutPos(i);
+                    if(Math.hypot(p.x-mx, p.y-my) < 12) {
+                        this.wireStart = { node:n, idx:i }; return;
+                    }
+                }
+            }
+            for(let i=this.nodes.length-1; i>=0; i--) {
+                const n = this.nodes[i];
+                if(mx >= n.x && mx <= n.x+n.w && my >= n.y && my <= n.y+n.h) {
+                    dragNode = n; return;
+                }
+            }
+        });
+
+        cvs.addEventListener('mousemove', e => {
+            this.mouse.x = e.offsetX; this.mouse.y = e.offsetY;
+            if(dragNode) { dragNode.x = e.offsetX - dragNode.w/2; dragNode.y = e.offsetY - dragNode.h/2; }
+        });
+
+        cvs.addEventListener('mouseup', e => {
+            if(this.wireStart) {
+                const mx=e.offsetX, my=e.offsetY;
+                for(let n of this.nodes) {
+                    for(let i=0; i<n.inputs.length; i++) {
+                        const p = n.getInPos(i);
+                        if(Math.hypot(p.x-mx, p.y-my) < 15) {
+                            if(n !== this.wireStart.node) {
+                                this.wireStart.node.outputs[this.wireStart.idx] = { node:n, inIdx:i };
+                                AudioSys.playTone('click');
+                            }
+                        }
+                    }
+                }
+                this.wireStart = null;
+            }
+            dragNode = null;
+        });
+
+        cvs.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            if(this.isRunning) return;
+            const mx=e.offsetX, my=e.offsetY;
+            for(let i=this.nodes.length-1; i>=0; i--) {
+                const n = this.nodes[i];
+                if(mx >= n.x && mx <= n.x+n.w && my >= n.y && my <= n.y+n.h) {
+                    this.sellNode(n); return;
+                }
+            }
+        });
+    }
+};
+
+class Particle {
+    constructor(x, y, color) {
+        this.x=x; this.y=y; this.color=color;
+        const a = Math.random()*Math.PI*2; const s = Math.random()*2+1;
+        this.vx=Math.cos(a)*s; this.vy=Math.sin(a)*s;
+        this.life=30+Math.random()*20; this.maxLife=this.life; this.size=Math.random()*3+2;
+    }
+}
+
+game.init();
+</script>
+</body>
+</html>
