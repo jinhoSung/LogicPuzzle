@@ -2,7 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Logic Node v12.4: Paper Crunch Sound</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Logic Node v17.3: Perfect Timing</title>
     <style>
         :root {
             --bg: #1e1e1e;
@@ -22,40 +23,44 @@
             margin: 0; background-color: var(--bg); color: var(--text);
             font-family: 'Segoe UI', monospace; overflow: hidden;
             display: flex; flex-direction: column; height: 100vh;
-            user-select: none;
+            user-select: none; -webkit-user-select: none;
+            touch-action: none;
         }
 
         /* 헤더 스타일 */
         header {
             height: 60px; background: var(--panel); border-bottom: 1px solid #333;
-            display: flex; align-items: center; padding: 0 25px;
+            display: flex; align-items: center; padding: 0 20px;
             justify-content: space-between; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 10;
+            flex-shrink: 0;
         }
         .header-title { font-size: 1.3rem; font-weight: 800; color: white; letter-spacing: 1px; }
-        .header-info { display: flex; gap: 15px; align-items: center; }
+        .header-info { display: flex; gap: 10px; align-items: center; }
         
         .stat-item {
             font-family: 'Consolas', monospace; font-size: 0.95rem; 
-            color: #ccc; background: rgba(0,0,0,0.3); padding: 8px 15px; 
+            color: #ccc; background: rgba(0,0,0,0.3); padding: 8px 12px; 
             border-radius: 6px; border: 1px solid #444; display: flex; align-items: center;
+            white-space: nowrap;
         }
-        .stat-label { color: #888; margin-right: 8px; font-size: 0.85em; font-weight: bold; }
+        .stat-label { color: #888; margin-right: 6px; font-size: 0.85em; font-weight: bold; }
 
-        /* 게이지 바 */
-        .power-meter-box { width: 120px; height: 8px; background: #111; border-radius: 4px; overflow: hidden; margin-left: 10px; }
+        .power-meter-box { width: 80px; height: 8px; background: #111; border-radius: 4px; overflow: hidden; margin-left: 6px; }
         .power-fill { height: 100%; background: linear-gradient(90deg, var(--power), #0077ff); width: 0%; transition: width 0.3s; }
         
         #funds-display { color: var(--gold); font-weight: bold; font-size: 1.1em; }
         #cpu-display { color: var(--cpu); font-weight: bold; font-size: 1.1em; text-shadow: 0 0 5px rgba(255, 153, 0, 0.3); }
+        #time-display { color: #ff5555; font-weight: bold; font-size: 1.1em; }
 
-        /* 메인 영역 */
-        #main { display: flex; flex: 1; }
+        /* 메인 레이아웃 */
+        #main { display: flex; flex: 1; position: relative; overflow: hidden; }
 
         /* 툴박스 */
         #toolbox {
             width: 260px; background: #2d2d30; border-right: 1px solid #333;
             padding: 15px; display: flex; flex-direction: column; gap: 12px;
-            z-index: 5; overflow-y: auto;
+            z-index: 5; overflow-y: auto; height: 100%; box-sizing: border-box;
+            flex-shrink: 0;
         }
         .node-item {
             background: #3e3e42; padding: 12px; border-radius: 8px;
@@ -70,21 +75,27 @@
         .tag-ai { background: var(--purple); color: #222; }
 
         /* 캔버스 */
-        #canvas-container {
-            flex: 1; position: relative; background-color: #222;
-            background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-            background-size: 40px 40px; overflow: hidden;
-        }
-        canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+        #canvas-container { flex: 1; position: relative; background-color: #222; overflow: hidden; }
+        canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 
-        /* 컨트롤 및 UI */
-        #controls { position: absolute; bottom: 30px; right: 30px; display: flex; gap: 10px; }
+        /* 툴팁 */
+        #tooltip {
+            position: absolute; display: none; pointer-events: none;
+            background: rgba(0, 0, 0, 0.9); border: 1px solid #777;
+            padding: 8px 12px; border-radius: 4px; color: #fff;
+            font-size: 0.85rem; z-index: 1000; white-space: pre-line;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            font-family: 'Consolas', monospace;
+        }
+
+        /* 컨트롤 */
+        #controls { position: absolute; bottom: 30px; right: 30px; display: flex; gap: 10px; z-index: 20;}
         .action-btn {
             background: var(--accent); color: white; border: none; padding: 12px 24px;
             font-size: 1rem; cursor: pointer; border-radius: 6px; font-weight: bold;
-            transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); white-space: nowrap;
         }
-        .action-btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        .action-btn:active { transform: translateY(2px); filter: brightness(0.9); }
         .btn-stop { background: var(--red); }
         .btn-retry { background: #4caf50; }
         .btn-clear { background: #444; }
@@ -94,9 +105,10 @@
             position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
             background: rgba(255, 68, 68, 0.9); color: white; padding: 10px 20px;
             border-radius: 20px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100;
+            width: max-content;
         }
 
-        /* 모달 공통 */
+        /* 모달 */
         .modal-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
@@ -104,14 +116,20 @@
         }
         .modal-content {
             background: #252526; border: 1px solid #555; padding: 40px;
-            border-radius: 12px; max-width: 500px; text-align: center;
+            border-radius: 12px; max-width: 500px; width: 90%; text-align: center;
             box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        .modal-title { font-size: 1.8rem; margin: 0 0 20px 0; color: white; }
-        .modal-text { font-size: 1rem; line-height: 1.6; color: #ddd; margin-bottom: 30px; text-align: left; }
-        .highlight { color: var(--yellow); font-weight: bold; background: rgba(255,255,0,0.1); padding: 0 4px; }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-        /* 상점 */
+        .modal-title { font-size: 2rem; margin: 0 0 20px 0; color: white; }
+        .modal-text { font-size: 1.1rem; line-height: 1.6; color: #ddd; margin-bottom: 30px; text-align: left; }
+        
+        .result-win { border-color: var(--green); }
+        .result-win .modal-title { color: var(--green); }
+        .result-fail { border-color: var(--red); }
+        .result-fail .modal-title { color: var(--red); }
+
         #store-modal .modal-content { border: 2px solid var(--gold); width: 450px; }
         .upgrade-item {
             display: flex; justify-content: space-between; align-items: center;
@@ -119,55 +137,99 @@
         }
         .up-btn { background: var(--gold); color: #222; border: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; }
         .up-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+        .close-btn { position: absolute; top: 15px; right: 15px; color: #aaa; cursor: pointer; font-size: 1.5rem; }
+
+        @media (max-width: 768px) {
+            header { padding: 0 10px; height: 50px; }
+            .header-title { font-size: 1rem; }
+            .stat-item { padding: 4px 8px; font-size: 0.8rem; }
+            .stat-label { margin-right: 4px; }
+            .power-meter-box { width: 40px; }
+            .header-info { gap: 5px; }
+            #goal-status { font-size: 0.8rem; }
+            #main { flex-direction: column; }
+            #canvas-container { width: 100%; flex: 1; }
+            #toolbox {
+                width: 100%; height: 140px; border-right: none; border-top: 1px solid #333;
+                flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 10px; gap: 10px; background: #222;
+            }
+            .node-item { min-width: 140px; height: 100px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; }
+            #controls { bottom: 10px; right: 10px; flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
+            .action-btn { padding: 8px 16px; font-size: 0.9rem; }
+            .modal-content { width: 85%; padding: 20px; }
+            .modal-title { font-size: 1.5rem; }
+            .modal-text { font-size: 0.95rem; }
+        }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="header-title">LOGIC NODE v12.4</div>
+    <div class="header-title">LOGIC NODE</div>
     <div class="header-info">
         <div class="stat-item" style="border-color: var(--gold);">
-            <span class="stat-label">MONEY</span>$<span id="funds-display">0</span>
+            <span class="stat-label">MON</span>$<span id="funds-display">0</span>
         </div>
         <div class="stat-item" style="border-color: var(--cpu);">
-            <span class="stat-label">CPU CLOCK</span><span id="cpu-display">1.0 GHz</span>
+            <span class="stat-label">CPU</span><span id="cpu-display">1.0G</span>
+        </div>
+        <div class="stat-item" style="border-color: var(--red);">
+            <span class="stat-label">TIME</span><span id="time-display">60s</span>
         </div>
         <div class="stat-item" style="border-color: var(--power);">
-            <span class="stat-label">POWER</span>
+            <span class="stat-label">PWR</span>
             <div class="power-meter-box"><div class="power-fill" id="power-bar"></div></div>
-            <span style="font-size:0.8em; margin-left:8px; font-weight:bold; color:var(--power)">
-                <span id="power-current">0</span>/<span id="power-max">50</span>W
+            <span style="font-size:0.8em; margin-left:4px; font-weight:bold; color:var(--power)">
+                <span id="power-current">0</span>/<span id="power-max">50</span>
             </span>
         </div>
         <div class="stat-item">
-            <span class="stat-label">GOAL</span><span id="goal-status" style="color:white; font-weight:bold;">...</span>
+            <span class="stat-label">GOAL</span><span id="goal-status" style="color:white; font-weight:bold; font-size:0.8rem;">...</span>
         </div>
     </div>
 </header>
 
 <div id="toast">알림</div>
+<div id="tooltip">Tooltip</div>
 
-<!-- 상점 -->
+<!-- 상점 모달 -->
 <div id="store-modal" class="modal-overlay">
     <div class="modal-content">
-        <div style="text-align:right; margin-bottom:-20px;"><span onclick="game.closeStore()" style="cursor:pointer; color:#aaa; font-size:1.5rem;">✕</span></div>
-        <h2 style="color:var(--gold); margin-top:0;">🛠️ Hardware Store</h2>
+        <span class="close-btn" onclick="game.closeStore()">✕</span>
+        <h2 style="color:var(--gold); margin-top:0;">🛠️ Store</h2>
         <div class="upgrade-item">
             <div><h4 style="margin:0; color:white">Power Supply</h4><p style="margin:0; font-size:0.8em; color:#aaa">+30 Max Power</p></div>
             <button class="up-btn" id="btn-up-power" onclick="game.buyUpgrade('POWER')">$200</button>
         </div>
         <div class="upgrade-item">
-            <div><h4 style="margin:0; color:white">Overclocking</h4><p style="margin:0; font-size:0.8em; color:#aaa">+0.2 GHz CPU Clock</p></div>
+            <div><h4 style="margin:0; color:white">Overclocking</h4><p style="margin:0; font-size:0.8em; color:#aaa">+0.2 GHz Speed</p></div>
             <button class="up-btn" id="btn-up-speed" onclick="game.buyUpgrade('SPEED')">$300</button>
         </div>
     </div>
 </div>
 
-<div id="main">
-    <div id="toolbox">
-        <!-- 노드 목록 JS 생성 -->
+<!-- 결과 모달 -->
+<div id="result-modal" class="modal-overlay">
+    <div class="modal-content" id="result-content">
+        <h2 class="modal-title" id="result-title">LEVEL CLEAR!</h2>
+        <p class="modal-text" id="result-desc">Success!</p>
+        <div style="display:flex; justify-content:center; gap:10px;">
+            <button class="action-btn btn-retry" onclick="game.retrySim(); game.closeResult();">↺ Retry</button>
+            <button class="action-btn" id="btn-next-level" onclick="game.nextLevel()">Next ➔</button>
+        </div>
     </div>
-    
+</div>
+
+<!-- 미션 브리핑 -->
+<div id="mission-modal" class="modal-overlay" style="display:flex;">
+    <div class="modal-content">
+        <h2 class="modal-title" id="m-title">Level 1</h2>
+        <div class="modal-text" id="m-desc">Loading...</div>
+        <button class="action-btn" onclick="game.closeModal()">Start</button>
+    </div>
+</div>
+
+<div id="main">
     <div id="canvas-container">
         <canvas id="gameCanvas"></canvas>
         <div id="controls">
@@ -176,71 +238,40 @@
             <button class="action-btn btn-retry" onclick="game.retrySim()">↺ 재시도</button>
             <button class="action-btn" onclick="game.toggleRun()" id="run-btn">▶ 실행</button>
         </div>
-        
-        <!-- 미션 브리핑 -->
-        <div id="mission-modal" class="modal-overlay" style="display:flex;">
-            <div class="modal-content">
-                <h2 class="modal-title" id="m-title">Level 1</h2>
-                <div class="modal-text" id="m-desc">로딩 중...</div>
-                <button class="action-btn" onclick="game.closeModal()">설계 시작</button>
-            </div>
-        </div>
+    </div>
+    <div id="toolbox">
+        <!-- JS 생성 -->
     </div>
 </div>
 
 <script>
-/**
- * 🔊 오디오 시스템
- */
 const AudioSys = {
-    ctx: null,
-    noiseBuffer: null,
+    ctx: null, noiseBuffer: null,
     init() { 
         if (!this.ctx) { 
             this.ctx = new (window.AudioContext || window.webkitAudioContext)(); 
-            // 백색 소음 버퍼 생성
             const bufferSize = this.ctx.sampleRate * 0.5; 
             const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
             const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                data[i] = Math.random() * 2 - 1;
-            }
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
             this.noiseBuffer = buffer;
         } 
-        if (this.ctx.state === 'suspended') { this.ctx.resume(); } 
+        if (this.ctx.state === 'suspended') this.ctx.resume(); 
     },
     playTone(type) {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
-        
         if (type === 'trash') { 
-            // 🗑️ 휴지통 사운드: 종이 구기는 소리 (바스락)
             if (this.noiseBuffer) {
-                const src = this.ctx.createBufferSource();
-                src.buffer = this.noiseBuffer;
-                // 재생 속도를 랜덤하게 하여 매번 다른 구김 소리
+                const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuffer;
                 src.playbackRate.value = 0.8 + Math.random() * 0.4;
-
-                const filter = this.ctx.createBiquadFilter();
-                filter.type = 'bandpass'; // 대역 통과 (바스락 거리는 대역)
-                filter.frequency.value = 1000 + Math.random() * 500; 
-                filter.Q.value = 0.5;
-
                 const gain = this.ctx.createGain();
-                // 짧고 강렬한 바스락
-                gain.gain.setValueAtTime(0, now);
-                gain.gain.linearRampToValueAtTime(1.5, now + 0.02);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-                
-                src.connect(filter);
-                filter.connect(gain);
-                gain.connect(this.ctx.destination);
-                
-                src.start(now);
-                src.stop(now + 0.3);
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass'; filter.frequency.value = 1000 + Math.random() * 500; filter.Q.value = 0.5;
+                gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(1.5, now + 0.02); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                src.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                src.start(now); src.stop(now + 0.3);
             }
-            // 타격음(쿵)은 제거됨
-            
         } else if (type === 'spawn') {
             const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
             osc.connect(gain); gain.connect(this.ctx.destination);
@@ -256,8 +287,7 @@ const AudioSys = {
         } else if (type === 'fail') {
             const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
             osc.connect(gain); gain.connect(this.ctx.destination);
-            osc.type = 'sawtooth'; 
-            osc.frequency.setValueAtTime(100, now); osc.frequency.linearRampToValueAtTime(50, now + 0.5);
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, now); osc.frequency.linearRampToValueAtTime(50, now + 0.5);
             gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
             osc.start(now); osc.stop(now + 0.5);
         } else if (type === 'click') {
@@ -278,267 +308,234 @@ const AudioSys = {
     }
 };
 
-/**
- * 🛠️ 게임 데이터
- */
 const COLORS = { RED:'#ff5555', BLUE:'#55aaff', GREEN:'#50fa7b', YELLOW:'#f1fa8c' };
 const SHAPES = { CIRCLE:0, SQUARE:1, TRIANGLE:2 };
-
-// 🛠️ 노드 정의: cost 제거됨
+// ⚡ Node processing intervals (in ms) - tuned for better flow
 const NODE_TYPES = {
-    FILTER: { name: "Color Filter", desc: "색상 분류", power: 5, tag: "Basic" },
-    SHAPE_SORTER: { name: "Shape Sorter", desc: "모양 분류", power: 8, tag: "Shape" },
-    PERCEPTRON: { name: "Perceptron AI", desc: "학습형 분류기", power: 15, tag: "AI" },
-    BALANCER: { name: "Balancer", desc: "부하 분산", power: 3, tag: "Util" },
-    TRASH: { name: "Trash", desc: "데이터 삭제", power: 1, tag: "Util" }
+    FILTER: { name: "Color Filter", desc: "색상 분류", power: 5, tag: "Basic", interval: 250 },
+    SHAPE_SORTER: { name: "Shape Sorter", desc: "모양 분류", power: 8, tag: "Shape", interval: 300 },
+    PERCEPTRON: { name: "Perceptron AI", desc: "학습형 분류기", power: 15, tag: "AI", interval: 400 },
+    BALANCER: { name: "Balancer", desc: "부하 분산", power: 3, tag: "Util", interval: 100 },
+    TRASH: { name: "Trash", desc: "데이터 삭제", power: 1, tag: "Util", interval: 50 }
 };
-
 const UPGRADE_COSTS = { POWER: 200, SPEED: 300 };
 
 const LEVELS = [
-    {
-        id: 1, title: "데이터 정제의 기초", grant: 0, power: 50, reward: 10,
-        desc: "<strong>목표:</strong> 네모(Square) 5개 수집.<br>노드 배치는 <strong>무료</strong>입니다. 전력(Power) 한도 내에서 설계하세요.<br>서버가 원하지 않는 데이터가 들어가면 <strong>작전 실패</strong>입니다.",
-        preset: [
-            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'RED', shape:'CIRCLE', count:5}, {color:'BLUE', shape:'SQUARE', count:5}] } },
-            { type: 'OUTPUT', x: 700, y: 200, props: { acceptShape: 'SQUARE', targetCount: 5 } }
-        ]
-    },
-    {
-        id: 2, title: "형상 인식 프로토콜", grant: 100, power: 55, reward: 12,
-        desc: "<strong>목표:</strong> 파란색 네모 10개 수집.<br>이번엔 색상이 모두 파란색이지만 모양이 다릅니다.<br><strong>Shape Sorter</strong>를 사용하여 네모만 골라내세요.",
-        preset: [
-            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:10}, {color:'BLUE', shape:'SQUARE', count:10}] } },
-            { type: 'OUTPUT', x: 700, y: 300, props: { acceptShape: 'SQUARE', targetCount: 10 } }
-        ]
-    },
-    {
-        id: 3, title: "부하 분산 처리", grant: 150, power: 60, reward: 15,
-        desc: "<strong>목표:</strong> 두 서버에 데이터 10개씩 분배.<br>단일 라인으로는 처리량이 부족할 수 있습니다.<br><strong>Balancer</strong>로 트래픽을 정확히 50:50으로 나누세요.",
-        preset: [
-            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'RED', shape:'CIRCLE', count:20}] } },
-            { type: 'OUTPUT', x: 700, y: 200, props: { acceptColor: 'RED', targetCount: 10 } },
-            { type: 'OUTPUT', x: 700, y: 400, props: { acceptColor: 'RED', targetCount: 10 } }
-        ]
-    },
-    {
-        id: 4, title: "오염된 데이터", grant: 0, power: 70, reward: 18,
-        desc: "<strong>목표:</strong> 초록색 삼각형 10개 수집.<br>데이터에 '노이즈(Noise)'가 섞여 있습니다.<br>필요 없는 데이터는 반드시 <strong>Trash</strong>로 보내 제거해야 시스템이 막히지 않습니다.",
-        preset: [
-            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'GREEN', shape:'TRIANGLE', count:10}, {color:'RED', shape:'SQUARE', count:10}, {color:'BLUE', shape:'CIRCLE', count:5}] } },
-            { type: 'OUTPUT', x: 700, y: 250, props: { acceptColor: 'GREEN', targetCount: 10 } }
-        ]
-    },
-    {
-        id: 5, title: "머신러닝의 시작", grant: 200, power: 80, reward: 20,
-        desc: "<strong>목표:</strong> 파란색 데이터 분류 (AI 활용).<br>복잡한 패턴이 감지됩니다. <strong>Perceptron AI</strong>를 사용해보세요.<br>처음엔 실수하지만 데이터를 처리할수록 정확도가 100%에 도달합니다.",
-        preset: [
-            { type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:15}, {color:'RED', shape:'TRIANGLE', count:15}] } },
-            { type: 'OUTPUT', x: 750, y: 300, props: { acceptColor: 'BLUE', targetCount: 15 } }
-        ]
-    },
-    {
-        id: 6, title: "멀티 스트림 병합", grant: 0, power: 90, reward: 25,
-        desc: "<strong>목표:</strong> 빨간색은 A서버, 파란색은 B서버로.<br>두 개의 제너레이터에서 데이터가 쏟아집니다.<br>각 라인을 합치거나 교차시켜 올바른 목적지로 보내세요.",
-        preset: [
-            { type: 'SOURCE', x: 80, y: 150, props: { spawnList: [{color:'RED', shape:'SQUARE', count:10}, {color:'BLUE', shape:'CIRCLE', count:5}] } },
-            { type: 'SOURCE', x: 80, y: 450, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:10}, {color:'RED', shape:'SQUARE', count:5}] } },
-            { type: 'OUTPUT', x: 800, y: 150, props: { acceptColor: 'RED', targetCount: 15 } },
-            { type: 'OUTPUT', x: 800, y: 450, props: { acceptColor: 'BLUE', targetCount: 15 } }
-        ]
-    },
-    {
-        id: 7, title: "고속 처리 아키텍처", grant: 300, power: 100, reward: 30,
-        desc: "<strong>목표:</strong> 대량 데이터 처리.<br>데이터 유입 속도가 매우 빠릅니다. 수익을 재투자하여<br>상점에서 <strong>CPU Overclocking</strong>을 업그레이드해야 원활한 처리가 가능합니다.",
-        preset: [
-            { type: 'SOURCE', x: 50, y: 300, props: { spawnList: [{color:'GREEN', shape:'SQUARE', count:40}] } },
-            { type: 'OUTPUT', x: 800, y: 200, props: { acceptColor: 'GREEN', targetCount: 20 } },
-            { type: 'OUTPUT', x: 800, y: 400, props: { acceptColor: 'GREEN', targetCount: 20 } }
-        ]
-    },
-    {
-        id: 8, title: "마스터 아키텍트", grant: 0, power: 120, reward: 50,
-        desc: "<strong>최종 목표:</strong> 모든 데이터 완벽 분류.<br>모든 종류의 데이터가 섞여 나옵니다.<br>지금까지 배운 모든 기술을 활용하여 완벽한 파이프라인을 구축하세요.",
-        preset: [
-            { type: 'SOURCE', x: 50, y: 300, props: { spawnList: [
-                {color:'RED', shape:'SQUARE', count:10}, 
-                {color:'BLUE', shape:'CIRCLE', count:10}, 
-                {color:'GREEN', shape:'TRIANGLE', count:10}
-            ] } },
-            { type: 'OUTPUT', x: 850, y: 100, props: { acceptShape: 'SQUARE', targetCount: 10 } },
-            { type: 'OUTPUT', x: 850, y: 300, props: { acceptShape: 'CIRCLE', targetCount: 10 } },
-            { type: 'OUTPUT', x: 850, y: 500, props: { acceptShape: 'TRIANGLE', targetCount: 10 } }
-        ]
-    }
+    { id: 1, title: "데이터 정제의 기초", grant: 0, power: 50, reward: 10, timeLimit: 60, desc: "<strong>목표:</strong> 네모(Square) 5개 수집.<br>제너레이터 포트가 하나로 통합되었습니다. 여러 라인을 연결하면 더 빠르게 내보낼 수 있습니다.<br>사용하지 않는 데이터는 반드시 <strong>Trash</strong>에 연결하세요!", preset: [{ type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'RED', shape:'CIRCLE', count:5}, {color:'BLUE', shape:'SQUARE', count:5}] } }, { type: 'OUTPUT', x: 700, y: 200, props: { acceptShape: 'SQUARE', targetCount: 5 } }, { type: 'TRASH', x: 700, y: 400, props: {} }] },
+    { id: 2, title: "형상 인식 프로토콜", grant: 100, power: 55, reward: 12, timeLimit: 50, desc: "<strong>목표:</strong> 파란색 네모 10개 수집.<br><strong>Shape Sorter</strong>를 사용하여 네모만 골라내세요.", preset: [{ type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:10}, {color:'BLUE', shape:'SQUARE', count:10}] } }, { type: 'OUTPUT', x: 700, y: 300, props: { acceptShape: 'SQUARE', targetCount: 10 } }, { type: 'TRASH', x: 700, y: 450, props: {} }] },
+    { id: 3, title: "부하 분산 처리", grant: 150, power: 60, reward: 15, timeLimit: 45, desc: "<strong>목표:</strong> 두 서버에 데이터 10개씩 분배.<br>입력량이 많으면 대기열이 생깁니다. <strong>Balancer</strong>로 부하를 나누세요.", preset: [{ type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'RED', shape:'CIRCLE', count:20}] } }, { type: 'OUTPUT', x: 700, y: 200, props: { acceptColor: 'RED', targetCount: 10 } }, { type: 'OUTPUT', x: 700, y: 400, props: { acceptColor: 'RED', targetCount: 10 } }, { type: 'TRASH', x: 550, y: 450, props: {} }] },
+    { id: 4, title: "오염된 데이터", grant: 0, power: 70, reward: 18, timeLimit: 60, desc: "<strong>목표:</strong> 초록색 삼각형 10개 수집.<br>노이즈 데이터를 걸러내세요.", preset: [{ type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'GREEN', shape:'TRIANGLE', count:10}, {color:'RED', shape:'SQUARE', count:10}, {color:'BLUE', shape:'CIRCLE', count:5}] } }, { type: 'OUTPUT', x: 700, y: 250, props: { acceptColor: 'GREEN', acceptShape: 'TRIANGLE', targetCount: 10 } }, { type: 'TRASH', x: 700, y: 400, props: {} }] },
+    { id: 5, title: "머신러닝의 시작", grant: 200, power: 80, reward: 20, timeLimit: 70, desc: "<strong>목표:</strong> 파란색 데이터 분류 (AI 활용).<br>AI 노드를 클릭하여 타겟을 설정하고 학습시키세요.", preset: [{ type: 'SOURCE', x: 100, y: 300, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:15}, {color:'RED', shape:'TRIANGLE', count:15}] } }, { type: 'OUTPUT', x: 750, y: 300, props: { acceptColor: 'BLUE', targetCount: 15 } }, { type: 'TRASH', x: 750, y: 450, props: {} }] },
+    { id: 6, title: "멀티 스트림 병합", grant: 0, power: 90, reward: 25, timeLimit: 80, desc: "<strong>목표:</strong> 빨간 네모 / 파란 원 분류.<br>두 개의 제너레이터를 동시에 처리해야 합니다.", preset: [{ type: 'SOURCE', x: 80, y: 150, props: { spawnList: [{color:'RED', shape:'SQUARE', count:10}, {color:'BLUE', shape:'CIRCLE', count:5}] } }, { type: 'SOURCE', x: 80, y: 450, props: { spawnList: [{color:'BLUE', shape:'CIRCLE', count:10}, {color:'RED', shape:'SQUARE', count:5}] } }, { type: 'OUTPUT', x: 800, y: 150, props: { acceptColor: 'RED', acceptShape: 'SQUARE', targetCount: 15 } }, { type: 'OUTPUT', x: 800, y: 450, props: { acceptColor: 'BLUE', acceptShape: 'CIRCLE', targetCount: 15 } }, { type: 'TRASH', x: 400, y: 300, props: {} }] },
+    { id: 7, title: "고속 처리 아키텍처", grant: 300, power: 100, reward: 30, timeLimit: 40, desc: "<strong>목표:</strong> 40개 데이터 초고속 처리.<br><strong>시간 제한이 매우 짧습니다.</strong><br>수익으로 CPU Overclocking을 업그레이드하세요.", preset: [{ type: 'SOURCE', x: 50, y: 300, props: { spawnList: [{color:'GREEN', shape:'SQUARE', count:40}] } }, { type: 'OUTPUT', x: 800, y: 200, props: { acceptColor: 'GREEN', acceptShape: 'SQUARE', targetCount: 20 } }, { type: 'OUTPUT', x: 800, y: 400, props: { acceptColor: 'GREEN', acceptShape: 'SQUARE', targetCount: 20 } }, { type: 'TRASH', x: 800, y: 550, props: {} }] },
+    { id: 8, title: "마스터 아키텍트", grant: 0, power: 120, reward: 50, timeLimit: 90, desc: "<strong>최종 목표:</strong> 모든 데이터 완벽 분류.<br>모든 기술을 동원하여 복잡한 데이터를 처리하세요.", preset: [{ type: 'SOURCE', x: 50, y: 300, props: { spawnList: [{color:'RED', shape:'SQUARE', count:10}, {color:'BLUE', shape:'CIRCLE', count:10}, {color:'GREEN', shape:'TRIANGLE', count:10}] } }, { type: 'OUTPUT', x: 850, y: 100, props: { acceptShape: 'SQUARE', targetCount: 10 } }, { type: 'OUTPUT', x: 850, y: 300, props: { acceptShape: 'CIRCLE', targetCount: 10 } }, { type: 'OUTPUT', x: 850, y: 500, props: { acceptShape: 'TRIANGLE', targetCount: 10 } }, { type: 'TRASH', x: 400, y: 400, props: {} }] }
 ];
 
+function drawShapeIcon(ctx,x,y,size,shape,color) {
+    ctx.fillStyle=color; ctx.beginPath();
+    if(shape==='SQUARE'||shape===1) ctx.rect(x-size/2,y-size/2,size,size);
+    else if(shape==='TRIANGLE'||shape===2) { ctx.moveTo(x,y-size/2); ctx.lineTo(x+size/2,y+size/2); ctx.lineTo(x-size/2,y+size/2); }
+    else ctx.arc(x,y,size/2,0,Math.PI*2);
+    ctx.fill();
+}
+function shuffleArray(a) { for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a;}
+
 class Packet {
-    constructor(color, shape, start, end, outIdx, inIdx) {
-        this.colorKey = color; this.color = COLORS[color]; this.shape = shape;
-        this.start = start; this.end = end; this.outIdx = outIdx; this.inIdx = inIdx;
-        this.t = 0;
-        let baseSpeed = 0.015;
-        if(shape === 'TRIANGLE') baseSpeed *= 1.5;
-        if(shape === 'SQUARE') baseSpeed *= 0.8;
-        this.baseSpeed = baseSpeed;
-        this.arrived = false;
+    constructor(c,s,start,end,oidx,iidx) {
+        this.colorKey=c; this.color=COLORS[c]; this.shape=s; this.start=start; this.end=end; this.outIdx=oidx; this.inIdx=iidx;
+        this.t=0; this.baseSpeed = (s==='TRIANGLE'?0.0012:(s==='SQUARE'?0.0006:0.0008)); // speed per ms
+        this.arrived=false;
     }
-    update(mult) {
-        this.t += this.baseSpeed * mult;
-        if(this.t >= 1) { this.t = 1; this.arrived = true; }
+    update(dt, m) { 
+        this.t += this.baseSpeed * m * dt; 
+        if(this.t>=1) { this.t=1; this.arrived=true; } 
     }
     draw(ctx) {
-        const sx = this.start.getOutPos(this.outIdx).x;
-        const sy = this.start.getOutPos(this.outIdx).y;
-        const ex = this.end.getInPos(this.inIdx).x;
-        const ey = this.end.getInPos(this.inIdx).y;
-        const dist = Math.abs(ex-sx); const cp1x = sx+dist*0.5; const cp2x = ex-dist*0.5;
-        const t = this.t; const invT = 1-t;
-        const x = Math.pow(invT,3)*sx + 3*Math.pow(invT,2)*t*cp1x + 3*invT*Math.pow(t,2)*cp2x + Math.pow(t,3)*ex;
-        const y = Math.pow(invT,3)*sy + 3*Math.pow(invT,2)*t*sy + 3*invT*Math.pow(t,2)*ey + Math.pow(t,3)*ey;
+        const s=this.start.getOutPos(this.outIdx); const e=this.end.getInPos(this.inIdx);
+        const sx=s.x, sy=s.y, ex=e.x, ey=e.y;
+        const cp1x = sx + Math.abs(ex-sx)*0.5;
+        const t=this.t; const it=1-t;
+        const x=Math.pow(it,3)*sx + 3*Math.pow(it,2)*t*cp1x + 3*it*Math.pow(t,2)*cp1x + Math.pow(t,3)*ex;
+        const y=Math.pow(it,3)*sy + 3*Math.pow(it,2)*t*sy + 3*it*Math.pow(t,2)*ey + Math.pow(t,3)*ey;
 
-        ctx.fillStyle = this.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
-        if(game.speedMultiplier > 1.2) {
-            ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.arc(x-(x-sx)*0.05, y-(y-sy)*0.05, 5, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1.0;
-        }
+        ctx.fillStyle=this.color; ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+        if(game.speedMultiplier>1.2) { ctx.globalAlpha=0.3; ctx.beginPath(); ctx.arc(x-(x-sx)*0.05, y-(y-sy)*0.05, 5, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha=1.0; }
         ctx.beginPath();
-        if(this.shape === 'SQUARE') ctx.rect(x-6, y-6, 12, 12);
-        else if(this.shape === 'TRIANGLE') { ctx.moveTo(x, y-6); ctx.lineTo(x+6, y+6); ctx.lineTo(x-6, y+6); ctx.closePath(); }
-        else ctx.arc(x, y, 6, 0, Math.PI*2);
+        if(this.shape==='SQUARE') ctx.rect(x-6,y-6,12,12);
+        else if(this.shape==='TRIANGLE') { ctx.moveTo(x,y-6); ctx.lineTo(x+6,y+6); ctx.lineTo(x-6,y+6); ctx.closePath(); }
+        else ctx.arc(x,y,6,0,Math.PI*2);
         ctx.fill(); ctx.stroke();
     }
 }
 
 class Node {
-    constructor(type, x, y) {
-        this.type = type; this.x = x; this.y = y;
-        this.w = 160; this.h = 80;
-        this.inputs = []; this.outputs = [];
-        this.props = {}; this.state = { accuracy: 0.5, trained: 0, toggle: 0 };
-        this.queue = []; this.collectedCount = 0;
+    constructor(t,x,y) {
+        this.type=t; this.x=x; this.y=y; this.w=160; this.h=80;
+        this.inputs=[]; this.outputs=[]; this.props={}; 
+        this.state={accuracy:0.5, trained:0, toggle:0}; 
+        this.queue=[]; this.collectedCount=0;
         
-        const t = NODE_TYPES[type] || {name: "Unknown", color: "#333"};
-        this.name = type === 'SOURCE' ? "Generator" : (type === 'OUTPUT' ? "Server" : t.name);
-        this.color = type === 'SOURCE' ? "#444" : (type === 'OUTPUT' ? "#222" : "#333");
-        if(type === 'PERCEPTRON') this.color = "#4a3b69";
+        this.inputBuffer = []; this.processTimer = 0;
+        this.maxInterval = NODE_TYPES[t] ? NODE_TYPES[t].interval : 0;
         
-        if(type === 'SOURCE') { this.outputs = [null]; this.props.spawnList = []; }
-        else if(type === 'OUTPUT') { this.inputs = [0]; this.props.targetCount = 0; }
+        const info = NODE_TYPES[t]||{name:"Unknown"}; this.name=t==='SOURCE'?"Generator":(t==='OUTPUT'?"Server":info.name);
+        this.color=t==='SOURCE'?"#444":(t==='OUTPUT'?"#222":(t==='PERCEPTRON'?"#4a3b69":"#333"));
+        
+        // Multi-Link: Generator has 1 output, Server/Trash 1 input, others 2 outputs
+        if(t==='SOURCE') { this.outputs=[[]]; this.props.spawnList=[]; }
+        else if(t==='OUTPUT' || t==='TRASH') { this.inputs=[0]; this.props.targetCount=0; }
         else {
-            this.inputs = [0]; 
-            this.outputs = (type === 'TRASH') ? [] : [null, null];
-            if(type === 'FILTER') this.props.filterColor = 'RED';
-            if(type === 'SHAPE_SORTER') this.props.targetShape = 'SQUARE';
-            if(type === 'PERCEPTRON') this.props.targetColor = 'BLUE';
+            this.inputs=[0]; 
+            this.outputs=t==='TRASH'?[]:[[],[]]; // Standard nodes outputs
+            if(t==='FILTER') this.props.filterColor='RED'; if(t==='SHAPE_SORTER') this.props.targetShape='SQUARE'; if(t==='PERCEPTRON') this.props.targetColor='BLUE';
+        }
+    }
+    
+    toggleConfig() {
+        const colorOrder = ['RED', 'BLUE', 'GREEN'];
+        const shapeOrder = ['SQUARE', 'CIRCLE', 'TRIANGLE'];
+        if (this.type === 'FILTER') {
+            const idx = colorOrder.indexOf(this.props.filterColor);
+            this.props.filterColor = colorOrder[(idx + 1) % colorOrder.length];
+        } else if (this.type === 'PERCEPTRON') {
+            const idx = colorOrder.indexOf(this.props.targetColor);
+            this.props.targetColor = colorOrder[(idx + 1) % colorOrder.length];
+        } else if (this.type === 'SHAPE_SORTER') {
+            const idx = shapeOrder.indexOf(this.props.targetShape);
+            this.props.targetShape = shapeOrder[(idx + 1) % shapeOrder.length];
         }
     }
 
-    getInPos(idx) { return { x: this.x, y: this.y + (this.h/(this.inputs.length+1))*(idx+1) }; }
-    getOutPos(idx) { return { x: this.x + this.w, y: this.y + (this.h/(this.outputs.length+1))*(idx+1) }; }
+    getInPos(i) { return {x:this.x, y:this.y+(this.h/(this.inputs.length+1))*(i+1)}; }
+    getOutPos(i) { return {x:this.x+this.w, y:this.y+(this.h/(this.outputs.length+1))*(i+1)}; }
+    
+    receive(p) { 
+        if(this.type==='OUTPUT') game.checkGoal(this,p); 
+        else if(this.type==='TRASH') { AudioSys.playTone('trash'); }
+        else {
+            this.inputBuffer.push({colorKey: p.colorKey, shape: p.shape});
+        }
+    }
+    
+    send(pData, portIdx) {
+        if (this.outputs[portIdx]) {
+            game.packets.push(new Packet(pData.colorKey, pData.shape, this, this.outputs[portIdx].node, portIdx, this.outputs[portIdx].inIdx));
+        }
+    }
 
-    receive(p) {
-        if(this.type === 'OUTPUT') game.checkGoal(this, p);
-        else if(this.type !== 'TRASH') this.process(p);
-        else AudioSys.playTone('trash'); 
+    tick(dt, speedMult) {
+        if (this.type === 'SOURCE' || this.type === 'OUTPUT' || this.type === 'TRASH') return;
+
+        if (this.processTimer > 0) {
+            this.processTimer -= dt * speedMult;
+        }
+
+        if (this.processTimer <= 0 && this.inputBuffer.length > 0) {
+            const item = this.inputBuffer.shift();
+            this.process(item);
+            this.processTimer = this.maxInterval;
+        }
     }
 
     process(p) {
-        let outPort = 0;
-        if(['FILTER','SHAPE_SORTER','PERCEPTRON'].includes(this.type)) {
-            game.spawnParticles(this.x + this.w/2, this.y + this.h/2, COLORS[p.colorKey], 3);
+        let op=0;
+        if(['FILTER','SHAPE_SORTER','PERCEPTRON'].includes(this.type)) game.spawnParticles(this.x+this.w/2, this.y+this.h/2, COLORS[p.colorKey], 3);
+        
+        if(this.type==='FILTER') op=(p.colorKey===this.props.filterColor)?0:1;
+        else if(this.type==='SHAPE_SORTER') op=(p.shape===this.props.targetShape)?0:1;
+        else if(this.type==='BALANCER') { op=this.state.toggle; this.state.toggle^=1; }
+        else if(this.type==='PERCEPTRON') {
+            const match=p.colorKey===this.props.targetColor; const corr=match?0:1;
+            if(this.state.accuracy<1.0) this.state.accuracy+=0.05;
+            op=(Math.random()<this.state.accuracy)?corr:(corr===0?1:0);
+            if(op!==corr) game.addEffect(this.x+this.w/2, this.y, "ERROR", "#f00");
         }
-
-        if(this.type === 'SOURCE') outPort = 0;
-        else if(this.type === 'FILTER') outPort = (p.colorKey === this.props.filterColor) ? 0 : 1;
-        else if(this.type === 'SHAPE_SORTER') outPort = (p.shape === this.props.targetShape) ? 0 : 1;
-        else if(this.type === 'BALANCER') { outPort = this.state.toggle; this.state.toggle ^= 1; }
-        else if(this.type === 'PERCEPTRON') {
-            const isMatch = (p.colorKey === this.props.targetColor);
-            const correct = isMatch ? 0 : 1;
-            if(this.state.accuracy < 1.0) this.state.accuracy += 0.05;
-            if(Math.random() < this.state.accuracy) outPort = correct;
-            else { outPort = correct === 0 ? 1 : 0; game.addEffect(this.x+this.w/2, this.y, "ERROR", "#f00"); }
-        }
-
-        if(this.outputs[outPort]) {
-            game.packets.push(new Packet(p.colorKey, p.shape, this, this.outputs[outPort].node, outPort, this.outputs[outPort].inIdx));
+        
+        if(this.type!=='SOURCE') {
+            const targetLinks = this.outputs[op];
+            if(targetLinks && targetLinks.length > 0) {
+                targetLinks.forEach(link => {
+                    game.packets.push(new Packet(p.colorKey, p.shape, this, link.node, op, link.inIdx));
+                });
+            } else {
+                game.triggerFail(this.x + this.w/2, this.y + this.h/2, "데이터 유실!", "데이터가 갈 곳이 없습니다.\n모든 출력 포트를 연결하거나 Trash에 버리세요.");
+            }
         }
     }
 
     draw(ctx) {
-        ctx.fillStyle = this.color; ctx.strokeStyle = (game.selectedNode===this)?'#fff':'#555'; ctx.lineWidth=2;
+        ctx.fillStyle=this.color; ctx.strokeStyle=(game.selectedNode===this)?'#fff':'#555'; ctx.lineWidth=2;
         ctx.beginPath(); ctx.roundRect(this.x, this.y, this.w, this.h, 10); ctx.fill(); ctx.stroke();
+        ctx.fillStyle='#fff'; ctx.font='bold 13px Segoe UI'; ctx.textAlign='center'; ctx.fillText(this.name, this.x+this.w/2, this.y+20);
         
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Segoe UI'; ctx.textAlign = 'center';
-        ctx.fillText(this.name, this.x + this.w/2, this.y + 20);
+        const pwr = NODE_TYPES[this.type]?NODE_TYPES[this.type].power:0;
+        if(pwr>0) { ctx.fillStyle='var(--power)'; ctx.font='bold 11px Consolas'; ctx.fillText(`⚡${pwr}W`, this.x+this.w-25, this.y+15); }
 
-        const power = NODE_TYPES[this.type] ? NODE_TYPES[this.type].power : 0;
-        if(power > 0) {
-            ctx.fillStyle = 'var(--power)'; ctx.font = 'bold 11px Consolas';
-            ctx.fillText(`⚡${power}W`, this.x+this.w-25, this.y+15);
+        if(this.inputBuffer.length > 0) {
+            ctx.fillStyle='#ffcc00'; ctx.font='bold 11px Consolas'; 
+            ctx.fillText(`Waiting: ${this.inputBuffer.length}`, this.x+this.w/2, this.y - 10);
         }
 
-        if(this.type === 'SOURCE' && this.props.spawnList) {
-            const counts = {};
-            const data = (game.isRunning && this.queue.length>0) ? this.queue : this.createQueue();
-            data.forEach(p => { const k=`${p.color}-${p.shape}`; if(!counts[k]) counts[k]={c:p.color, s:p.shape, n:0}; counts[k].n++; });
-            
-            let idx = 0; const w = 35; const sx = this.x + this.w/2 - (Object.keys(counts).length*w)/2 + w/2;
+        if(this.type==='SOURCE' && this.props.spawnList) {
+            const counts={}; const data=(game.isRunning && this.queue.length>0)?this.queue:this.createQueue();
+            data.forEach(p=>{ const k=`${p.colorKey}-${p.shape}`; if(!counts[k]) counts[k]={c:p.colorKey,s:p.shape,n:0}; counts[k].n++; });
+            let idx=0; const w=35; const sx=this.x+this.w/2 - (Object.keys(counts).length*w)/2 + w/2;
             for(let k in counts) {
-                drawIcon(ctx, sx+idx*w, this.y+45, 12, counts[k].s, COLORS[counts[k].c]);
-                ctx.fillStyle='#fff'; ctx.font='11px Consolas'; ctx.fillText(`x${counts[k].n}`, sx+idx*w, this.y+60);
-                idx++;
+                drawShapeIcon(ctx, sx+idx*w, this.y+45, 12, counts[k].s, COLORS[counts[k].c]);
+                ctx.fillStyle='#fff'; ctx.font='11px Consolas'; ctx.fillText(`x${counts[k].n}`, sx+idx*w, this.y+60); idx++;
             }
-        } else if(this.type === 'OUTPUT') {
-            if(this.props.acceptColor) drawIcon(ctx, this.x+this.w/2, this.y+45, 16, 'CIRCLE', COLORS[this.props.acceptColor]);
-            else if(this.props.acceptShape) drawIcon(ctx, this.x+this.w/2, this.y+45, 16, this.props.acceptShape, '#aaa');
-            
-            ctx.fillStyle = this.collectedCount >= this.props.targetCount ? '#50fa7b' : '#fff';
-            ctx.font = 'bold 12px Segoe UI';
+        } else if(this.type==='OUTPUT') {
+            if(this.props.acceptColor) drawShapeIcon(ctx, this.x+this.w/2, this.y+45, 16, 'CIRCLE', COLORS[this.props.acceptColor]);
+            else if(this.props.acceptShape) drawShapeIcon(ctx, this.x+this.w/2, this.y+45, 16, this.props.acceptShape, '#aaa');
+            ctx.fillStyle=this.collectedCount>=this.props.targetCount?'#50fa7b':'#fff'; ctx.font='bold 12px Segoe UI';
             ctx.fillText(`${this.collectedCount}/${this.props.targetCount}`, this.x+this.w/2, this.y+32);
         } else {
-            ctx.fillStyle = '#aaa'; ctx.font = '10px Segoe UI';
-            let info = "";
-            if(this.type === 'FILTER') info = `Filter: ${this.props.filterColor}`;
-            if(this.type === 'SHAPE_SORTER') info = `Sort: ${this.props.targetShape}`;
-            if(this.type === 'PERCEPTRON') {
+            ctx.fillStyle='#aaa'; ctx.font='10px Segoe UI'; let info="";
+            if(this.type==='FILTER') { info=`Pass:`; drawShapeIcon(ctx, this.x+this.w/2 + 20, this.y+35, 8, 'CIRCLE', COLORS[this.props.filterColor]); }
+            if(this.type==='SHAPE_SORTER') { info=`Sort:`; drawShapeIcon(ctx, this.x+this.w/2 + 20, this.y+35, 8, this.props.targetShape, '#aaa'); }
+            if(this.type==='PERCEPTRON') {
                 const w=80, h=4; ctx.fillStyle='#222'; ctx.fillRect(this.x+(this.w-w)/2, this.y+45, w, h);
                 ctx.fillStyle='#0f0'; ctx.fillRect(this.x+(this.w-w)/2, this.y+45, w*this.state.accuracy, h);
-                info = `Acc: ${Math.floor(this.state.accuracy*100)}%`; ctx.fillStyle='#fff';
+                info=`Learn:`; drawShapeIcon(ctx, this.x+this.w/2 + 25, this.y+35, 8, 'CIRCLE', COLORS[this.props.targetColor]);
             }
-            if(info) ctx.fillText(info, this.x+this.w/2, this.y+35);
+            if(info) ctx.fillText(info, this.x+this.w/2 - 10, this.y+38);
         }
-
         const r=5;
-        this.inputs.forEach((_,i)=>{ const p=this.getInPos(i); ctx.fillStyle='#999'; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill(); });
-        this.outputs.forEach((l,i)=>{ const p=this.getOutPos(i); ctx.fillStyle=l?'#fff':'#555'; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill(); });
+        this.inputs.forEach((_,i)=>{const p=this.getInPos(i); ctx.fillStyle='#999'; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();});
+        this.outputs.forEach((portLinks,i)=>{
+            const p=this.getOutPos(i); 
+            ctx.fillStyle= (Array.isArray(portLinks) && portLinks.length>0) ? '#fff':'#555'; 
+            ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
+        });
     }
-
     createQueue() {
-        let q=[];
-        if(this.props.spawnList) this.props.spawnList.forEach(i => { for(let k=0; k<i.count; k++) q.push({color:i.color, shape:i.shape}); });
+        let q=[]; 
+        if(this.props.spawnList) {
+            this.props.spawnList.forEach(i=>{
+                for(let k=0;k<i.count;k++) q.push({colorKey:i.color, shape:i.shape});
+            });
+        }
         return q;
     }
 }
 
-function drawIcon(ctx, x, y, size, shape, color) {
-    ctx.fillStyle = color; ctx.beginPath();
-    if(shape==='SQUARE'||shape===1) ctx.rect(x-size/2, y-size/2, size, size);
-    else if(shape==='TRIANGLE'||shape===2) { ctx.moveTo(x, y-size/2); ctx.lineTo(x+size/2, y+size/2); ctx.lineTo(x-size/2, y+size/2); }
-    else ctx.arc(x, y, size/2, 0, Math.PI*2);
-    ctx.fill();
+class Particle {
+    constructor(x, y, color) {
+        this.x=x; this.y=y; this.color=color;
+        const a = Math.random()*6.28; const s = Math.random()*2+1;
+        this.vx=Math.cos(a)*s; this.vy=Math.sin(a)*s;
+        this.life=30+Math.random()*20; this.max=this.life; this.size=Math.random()*3+2;
+    }
 }
 
-/**
- * 🎮 메인 게임 로직
- */
 const game = {
-    canvas: document.getElementById('gameCanvas'),
-    ctx: null,
+    canvas: document.getElementById('gameCanvas'), ctx: null,
     nodes: [], packets: [], effects: [], particles: [],
     level: 0, isRunning: false,
     money: 0, levelStartMoney: 0, maxPower: 50, currentPower: 0, speedMultiplier: 1.0,
     collected: {}, mouse: {x:0, y:0}, wireStart: null,
+    camera: { x: 0, y: 0, zoom: 1 }, isPanning: false, panStart: { x: 0, y: 0 }, lastPinchDist: 0,
+    timeLeft: 0, lastTime: 0, sourceTimer: 800,
 
     init() {
         this.ctx = this.canvas.getContext('2d');
@@ -546,348 +543,520 @@ const game = {
         window.onresize = () => this.resize(); this.resize();
         this.setupInput();
         this.loadLevel(1);
-        this.loop();
+        requestAnimationFrame(t => this.loop(t));
     },
-
+    
     initToolbox() {
         const tb = document.getElementById('toolbox');
         for(let type in NODE_TYPES) {
-            const data = NODE_TYPES[type];
-            if(['SOURCE','OUTPUT'].includes(type)) continue;
-            const div = document.createElement('div');
-            div.className = 'node-item';
-            div.innerHTML = `
-                <span class="node-tag ${data.tag==='AI'?'tag-ai':'tag-basic'}">${data.tag}</span>
-                <span class="node-name">${data.name}</span>
-                <span class="node-desc">${data.desc}</span>
-                <div class="node-meta">
-                    <span style="color:var(--power)">⚡${data.power}W</span>
-                </div>`;
-            div.onclick = () => this.addNode(type);
-            tb.appendChild(div);
+            const data = NODE_TYPES[type]; if(['SOURCE','OUTPUT'].includes(type)) continue;
+            const div = document.createElement('div'); div.className = 'node-item';
+            div.innerHTML = `<span class="node-tag ${data.tag==='AI'?'tag-ai':'tag-basic'}">${data.tag}</span><span class="node-name">${data.name}</span><span class="node-desc">${data.desc}</span><div class="node-meta"><span style="color:var(--power)">⚡${data.power}W</span><span style="color:#aaa;font-size:0.8em;margin-left:5px;">~${data.interval}ms</span></div>`;
+            div.onclick = () => this.addNode(type); tb.appendChild(div);
         }
     },
-
+    
     resize() { this.canvas.width = this.canvas.parentElement.offsetWidth; this.canvas.height = this.canvas.parentElement.offsetHeight; },
 
     loadLevel(id) {
-        this.level = id;
-        const data = LEVELS.find(l => l.id === id);
+        this.level = id; const data = LEVELS.find(l=>l.id===id);
         this.clearAll();
-        
         document.getElementById('m-title').innerText = `Level ${id}: ${data.title}`;
         document.getElementById('m-desc').innerHTML = data.desc;
         document.getElementById('mission-modal').style.display = 'flex';
-
-        if(id === 1) { this.money = 0; this.maxPower = 50; this.speedMultiplier = 1.0; }
-        else if(data.power) this.maxPower = Math.max(this.maxPower, data.power);
         
+        if(id===1) { this.money=0; this.maxPower=50; this.speedMultiplier=1.0; }
+        else if(data.power) this.maxPower = Math.max(this.maxPower, data.power);
         if(data.grant) this.money += data.grant;
         this.levelStartMoney = this.money;
+        this.timeLeft = data.timeLimit || 60;
+        
+        this.camera = { x: 0, y: 0, zoom: 1 };
 
         data.preset.forEach(p => {
-            const n = new Node(p.type, p.x, p.y);
-            if(p.props) Object.assign(n.props, p.props);
+            const n = new Node(p.type, p.x, p.y); if(p.props) Object.assign(n.props, p.props);
             this.nodes.push(n);
         });
+        this.fitCameraToNodes();
         this.updateUI();
     },
-
-    clearAll() {
-        this.stopSim();
-        this.nodes = []; this.packets = []; this.particles = []; this.effects = [];
-    },
-
-    retrySim() {
-        this.stopSim();
-        this.packets = []; this.particles = []; this.effects = [];
-        this.money = this.levelStartMoney; 
+    
+    fitCameraToNodes() {
+        if (this.nodes.length === 0) return;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         this.nodes.forEach(n => {
-            n.collectedCount = 0;
-            if(n.type === 'SOURCE') {
-                n.queue = n.createQueue();
-                for(let i=n.queue.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [n.queue[i], n.queue[j]] = [n.queue[j], n.queue[i]]; }
-            }
+            minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+            maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
         });
-        this.updateUI();
-        this.showToast("시뮬레이션 재시작 (자금 복구됨)");
+        const worldW = maxX - minX; const worldH = maxY - minY;
+        const screenW = this.canvas.width; const screenH = this.canvas.height;
+        this.camera.x = (screenW / 2) - (minX + worldW / 2);
+        this.camera.y = (screenH / 2) - (minY + worldH / 2);
     },
 
+    clearAll() { this.stopSim(); this.nodes=[]; this.packets=[]; this.particles=[]; this.effects=[]; },
+    retrySim() {
+        this.stopSim(); this.packets=[]; this.particles=[]; this.effects=[];
+        this.money = this.levelStartMoney;
+        const data = LEVELS.find(l=>l.id===this.level);
+        this.timeLeft = data.timeLimit || 60;
+        this.nodes.forEach(n => {
+            n.collectedCount=0; n.inputBuffer=[]; n.processTimer=0;
+            if(n.type==='SOURCE') { n.queue=n.createQueue(); shuffleArray(n.queue); }
+        });
+        this.updateUI(); this.showToast("재시작: 자금 및 시간 복구됨");
+    },
     resetLevel() { if(confirm("초기화 하시겠습니까?")) this.loadLevel(this.level); },
-
+    
     toggleRun() {
         if(this.isRunning) this.stopSim();
         else {
             AudioSys.init();
-            this.nodes.filter(n=>n.type==='SOURCE').forEach(n => {
-                if(!n.queue || n.queue.length===0) {
-                    n.queue = n.createQueue();
-                    for(let i=n.queue.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [n.queue[i], n.queue[j]] = [n.queue[j], n.queue[i]]; }
-                }
-            });
-
-            this.isRunning = true;
-            document.getElementById('run-btn').innerText = "⏹ 정지";
-            document.getElementById('run-btn').classList.add('btn-stop');
+            this.nodes.filter(n=>n.type==='SOURCE').forEach(n => { if(!n.queue || n.queue.length===0) { n.queue=n.createQueue(); shuffleArray(n.queue); } });
+            this.isRunning=true;
+            this.lastTime = performance.now(); 
+            document.getElementById('run-btn').innerText="⏹ 정지"; document.getElementById('run-btn').classList.add('btn-stop');
             
             this.genTimer = setInterval(() => {
-                let active = false;
+                let active=false;
+                
+                // Time Limit Logic
+                this.timeLeft -= (0.8 / this.speedMultiplier) / 10; 
+                if(this.timeLeft <= 0) { this.timeLeft=0; this.showResult(false, "Time Over!"); this.stopSim(); return; }
+                document.getElementById('time-display').innerText = Math.ceil(this.timeLeft)+'s';
+
+                this.nodes.forEach(n => n.tick(16, this.speedMultiplier)); 
+
                 this.nodes.filter(n=>n.type==='SOURCE').forEach(s => {
-                    if(s.queue.length > 0) {
-                        active = true;
-                        const item = s.queue.shift();
-                        s.process({colorKey:item.color, shape:item.shape});
-                        AudioSys.playTone('spawn'); 
-                    }
+                    const links = s.outputs[0];
+                    links.forEach(link => {
+                        if(s.queue.length > 0) { 
+                            active=true; 
+                            const item=s.queue.shift(); 
+                            game.packets.push(new Packet(item.colorKey, item.shape, s, link.node, 0, link.inIdx));
+                            AudioSys.playTone('spawn'); 
+                        }
+                    });
                 });
-                if(!active && this.packets.length === 0) {
-                    clearInterval(this.genTimer);
-                    setTimeout(() => this.checkResult(), 1500);
-                }
-            }, 800 / this.speedMultiplier);
+                
+                const hasPackets = this.packets.length > 0;
+                const hasQueue = this.nodes.some(n => n.inputBuffer && n.inputBuffer.length > 0);
+                const sourcesEmpty = this.nodes.filter(n=>n.type==='SOURCE').every(s=>s.queue.length===0);
+
+                if(sourcesEmpty && !active && !hasPackets && !hasQueue) { clearInterval(this.genTimer); setTimeout(()=>this.checkResult(), 1500); }
+            }, 800/this.speedMultiplier);
         }
     },
-
-    stopSim() {
-        this.isRunning = false; clearInterval(this.genTimer);
-        const btn = document.getElementById('run-btn');
-        btn.innerText = "▶ 실행"; btn.classList.remove('btn-stop');
-    },
-
+    stopSim() { this.isRunning=false; clearInterval(this.genTimer); document.getElementById('run-btn').innerText="▶ 실행"; document.getElementById('run-btn').classList.remove('btn-stop'); },
+    
     checkResult() {
-        if (!this.isRunning) return;
+        if(!this.isRunning) return;
         let win = true;
-        this.nodes.filter(n=>n.type==='OUTPUT').forEach(n => {
-            if(n.collectedCount < n.props.targetCount) win = false;
-        });
-        if(!win) {
-            AudioSys.playTone('fail');
-            alert("❌ 작전 실패: 목표 수량 미달");
-            this.stopSim();
-        }
-    },
-
-    checkGoal(node, p) {
-        let ok = true;
-        if(node.props.acceptColor && node.props.acceptColor !== p.colorKey) ok = false;
-        if(node.props.acceptShape && node.props.acceptShape !== p.shape) ok = false;
-
-        if(ok) {
-            node.collectedCount++;
-            AudioSys.playTone('success'); 
-            const reward = LEVELS.find(l=>l.id===this.level).reward;
-            this.money += reward;
-            this.addEffect(node.x, node.y-20, `+$${reward}`, "#ffd700");
-            
-            for(let i=0; i<5; i++) this.particles.push(new Particle(node.x+node.w/2, node.y+node.h/2, "#ffd700"));
-
-            this.updateUI();
-            
-            const outputs = this.nodes.filter(n=>n.type==='OUTPUT');
-            if(outputs.every(n => n.collectedCount >= n.props.targetCount)) {
-                setTimeout(() => {
-                    AudioSys.playTone('clear'); 
-                    alert("🎉 LEVEL CLEAR!");
-                    if(this.level < LEVELS.length) this.loadLevel(this.level+1);
-                    else alert("🏆 ALL LEVELS COMPLETED!");
-                }, 500);
-            }
-        } else {
-            AudioSys.playTone('fail');
-            this.addEffect(node.x, node.y-20, "FATAL ERROR", "#f00");
-            this.spawnParticles(node.x + node.w/2, node.y + node.h/2, "#f00", 10);
-            this.stopSim();
-            setTimeout(() => { alert("❌ 작전 실패: 서버에 잘못된 데이터 유입!"); }, 50);
-        }
+        this.nodes.filter(n=>n.type==='OUTPUT').forEach(n => { if(n.collectedCount < n.props.targetCount) win=false; });
+        if(!win) { AudioSys.playTone('fail'); this.showResult(false); this.stopSim(); }
     },
     
-    spawnParticles(x, y, color, count) {
-        for(let i=0; i<count; i++) this.particles.push(new Particle(x, y, color));
+    triggerFail(x, y, shortMsg, longMsg) {
+        if(!this.isRunning) return;
+        AudioSys.playTone('fail');
+        this.addEffect(x, y, shortMsg || "ERROR", "#f00");
+        this.spawnParticles(x, y, "#f00", 10);
+        this.stopSim();
+        setTimeout(() => this.showResult(false, longMsg || shortMsg || "작전 실패"), 100);
+    },
+    
+    checkGoal(n,p) {
+        let ok=true; 
+        if(n.props.acceptColor && n.props.acceptColor!==p.colorKey) ok=false; 
+        if(n.props.acceptShape && n.props.acceptShape!==p.shape) ok=false;
+        if(ok) {
+            n.collectedCount++; AudioSys.playTone('success');
+            const r = LEVELS.find(l=>l.id===this.level).reward; this.money+=r; this.addEffect(n.x, n.y-20, `+$${r}`, "#ffd700");
+            for(let i=0;i<5;i++) this.particles.push(new Particle(n.x+n.w/2, n.y+n.h/2, "#ffd700"));
+            this.updateUI();
+            const outputs = this.nodes.filter(node=>node.type==='OUTPUT');
+            if(outputs.every(node=>node.collectedCount >= node.props.targetCount)) {
+                setTimeout(() => { AudioSys.playTone('clear'); this.showResult(true); }, 500);
+            }
+        } else {
+            this.triggerFail(n.x, n.y-20, "잘못된 데이터!", "서버가 원하지 않는 데이터가 유입되었습니다.");
+        }
+    },
+
+    showResult(success, msg) {
+        const modal = document.getElementById('result-modal');
+        const content = document.getElementById('result-content');
+        const title = document.getElementById('result-title');
+        const desc = document.getElementById('result-desc');
+        const nextBtn = document.getElementById('btn-next-level');
+        
+        modal.style.display = 'flex';
+        content.className = 'modal-content ' + (success ? 'result-win' : 'result-fail');
+        title.innerText = success ? "LEVEL CLEAR!" : "MISSION FAILED";
+        desc.innerText = msg || (success ? "모든 데이터가 완벽하게 처리되었습니다." : "목표 수량 미달 또는 오염 발생.");
+        nextBtn.style.display = success ? 'inline-block' : 'none';
+    },
+    closeResult() { document.getElementById('result-modal').style.display='none'; },
+    nextLevel() {
+        this.closeResult();
+        if(this.level < LEVELS.length) this.loadLevel(this.level+1);
+        else alert("🏆 모든 레벨을 완료했습니다! 당신은 최고의 아키텍트입니다.");
     },
 
     addNode(type) {
-        if(this.isRunning) return;
-        AudioSys.init(); 
-        const conf = NODE_TYPES[type];
-        if(this.currentPower + conf.power > this.maxPower) { this.showToast("전력 부족!"); return; }
-        
-        this.nodes.push(new Node(type, 200, 200));
-        AudioSys.playTone('click');
-        this.updateUI();
+        if(this.isRunning) return; AudioSys.init();
+        const conf=NODE_TYPES[type];
+        if(this.currentPower+conf.power > this.maxPower) { this.showToast("전력 부족!"); return; }
+        const cx = (this.canvas.width/2 - this.camera.x) / this.camera.zoom - 80;
+        const cy = (this.canvas.height/2 - this.camera.y) / this.camera.zoom - 40;
+        this.nodes.push(new Node(type, cx, cy));
+        AudioSys.playTone('click'); this.updateUI();
     },
-
     sellNode(n) {
-        if(n.type==='SOURCE' || n.type==='OUTPUT') return;
-        this.nodes = this.nodes.filter(x => x !== n);
-        this.nodes.forEach(x => x.outputs = x.outputs.map(l => (l && l.node===n) ? null : l));
-        AudioSys.playTone('click');
-        this.updateUI();
-    },
-
-    updateUI() {
-        let totalW = 0; this.nodes.forEach(n => {
-            if(NODE_TYPES[n.type]) totalW += NODE_TYPES[n.type].power;
+        if(n.type==='SOURCE'||n.type==='OUTPUT') return;
+        this.nodes=this.nodes.filter(x=>x!==n);
+        this.nodes.forEach(x => {
+            x.outputs.forEach(portLinks => {
+                if (Array.isArray(portLinks)) {
+                    for(let i = portLinks.length - 1; i >= 0; i--) {
+                        if(portLinks[i].node === n) portLinks.splice(i, 1);
+                    }
+                }
+            });
         });
-        this.currentPower = totalW;
+        AudioSys.playTone('click'); this.updateUI();
+    },
+    spawnParticles(x,y,c,n) { for(let i=0;i<n;i++) this.particles.push(new Particle(x,y,c)); },
+    addEffect(x,y,t,c) { this.effects.push({x,y,text:t,color:c,life:60}); },
+    showToast(m) { const t=document.getElementById('toast'); t.innerText=m; t.style.opacity=1; t.style.top="90px"; setTimeout(()=>{t.style.opacity=0; t.style.top="80px";},1500); },
+    closeModal() { document.getElementById('mission-modal').style.display='none'; AudioSys.init(); },
+    openStore(){document.getElementById('store-modal').style.display='block';this.updateStoreBtn();},
+    closeStore(){document.getElementById('store-modal').style.display='none';},
+    updateStoreBtn(){
+        document.getElementById('btn-up-power').disabled=this.money<UPGRADE_COSTS.POWER;
+        document.getElementById('btn-up-speed').disabled=this.money<UPGRADE_COSTS.SPEED;
+    },
+    buyUpgrade(t) {
+        if(t==='POWER'&&this.money>=UPGRADE_COSTS.POWER){this.money-=UPGRADE_COSTS.POWER;this.maxPower+=30;this.showToast("Max Power Up!");}
+        else if(t==='SPEED'&&this.money>=UPGRADE_COSTS.SPEED){this.money-=UPGRADE_COSTS.SPEED;this.speedMultiplier+=0.2;this.showToast("CPU Speed Up!");}
+        AudioSys.playTone('success'); this.updateUI(); this.updateStoreBtn();
+    },
+    updateUI() {
+        let tw=0; this.nodes.forEach(n=>{if(NODE_TYPES[n.type]) tw+=NODE_TYPES[n.type].power;}); this.currentPower=tw;
+        document.getElementById('funds-display').innerText=this.money;
+        document.getElementById('power-current').innerText=this.currentPower;
+        document.getElementById('power-max').innerText=this.maxPower;
+        document.getElementById('cpu-display').innerText=`${this.speedMultiplier.toFixed(1)} GHz`;
+        document.getElementById('time-display').innerText = Math.ceil(this.timeLeft)+'s';
+        const pct=Math.min(100,(this.currentPower/this.maxPower)*100);
+        document.getElementById('power-bar').style.width=pct+'%';
+        document.getElementById('power-bar').style.background=pct>90?'#f44':'linear-gradient(90deg, var(--power), #0077ff)';
         
-        document.getElementById('funds-display').innerText = this.money;
-        document.getElementById('power-current').innerText = this.currentPower;
-        document.getElementById('power-max').innerText = this.maxPower;
-        document.getElementById('cpu-display').innerText = `${this.speedMultiplier.toFixed(1)} GHz`;
-        
-        const pct = Math.min(100, (this.currentPower/this.maxPower)*100);
-        document.getElementById('power-bar').style.width = pct+'%';
-        document.getElementById('power-bar').style.background = pct>90?'#f44': 'linear-gradient(90deg, var(--power), #0077ff)';
-        
-        let cleared = this.nodes.filter(n=>n.type==='OUTPUT' && n.collectedCount >= n.props.targetCount).length;
-        let total = this.nodes.filter(n=>n.type==='OUTPUT').length;
-        document.getElementById('goal-status').innerText = `${cleared}/${total} Servers Ready`;
+        let c=this.nodes.filter(n=>n.type==='OUTPUT'&&n.collectedCount>=n.props.targetCount).length;
+        let t=this.nodes.filter(n=>n.type==='OUTPUT').length;
+        document.getElementById('goal-status').innerText=`${c}/${t} Ready`;
     },
 
-    openStore() { document.getElementById('store-modal').style.display='block'; this.updateStoreBtn(); },
-    closeStore() { document.getElementById('store-modal').style.display='none'; },
-    updateStoreBtn() {
-        document.getElementById('btn-up-power').disabled = this.money < UPGRADE_COSTS.POWER;
-        document.getElementById('btn-up-speed').disabled = this.money < UPGRADE_COSTS.SPEED;
-    },
-    buyUpgrade(type) {
-        if(type==='POWER' && this.money >= UPGRADE_COSTS.POWER) {
-            this.money -= UPGRADE_COSTS.POWER; this.maxPower += 30;
-            this.addEffect(this.canvas.width/2, this.canvas.height/2, "MAX POWER UP!", "#00d2ff");
-        } else if(type==='SPEED' && this.money >= UPGRADE_COSTS.SPEED) {
-            this.money -= UPGRADE_COSTS.SPEED; this.speedMultiplier += 0.2;
-            this.addEffect(this.canvas.width/2, this.canvas.height/2, "CPU BOOST!", "#ff9900");
-        }
-        AudioSys.playTone('success');
-        this.updateUI(); this.updateStoreBtn();
+    loop(timestamp) {
+        const dt = timestamp - this.lastTime;
+        this.lastTime = timestamp;
+        this.update(dt); 
+        this.draw(); 
+        requestAnimationFrame(t=>this.loop(t));
     },
     
-    addEffect(x, y, t, c) { this.effects.push({x,y,text:t,color:c,life:60}); },
-    showToast(msg) {
-        const t = document.getElementById('toast'); t.innerText=msg; t.style.opacity=1; t.style.top="90px";
-        setTimeout(()=> { t.style.opacity=0; t.style.top="80px"; }, 1500);
-    },
-    closeModal() { document.getElementById('mission-modal').style.display='none'; AudioSys.init(); },
+    update(dt) {
+        if(this.isRunning && dt) {
+            this.timeLeft -= dt / 1000; 
+            if(this.timeLeft <= 0) { this.timeLeft=0; this.showResult(false, "Time Over!"); this.stopSim(); return; }
+            document.getElementById('time-display').innerText = Math.ceil(this.timeLeft)+'s';
 
-    loop() {
-        this.update(); this.draw(); requestAnimationFrame(() => this.loop());
-    },
-    update() {
-        if(this.isRunning) {
-            this.packets.forEach(p => p.update(this.speedMultiplier));
-            this.packets.filter(p=>p.arrived).forEach(p => p.end.receive(p));
-            this.packets = this.packets.filter(p=>!p.arrived);
+            this.nodes.forEach(n => n.tick(dt, this.speedMultiplier)); 
+
+            // Packet update with dt
+            this.packets.forEach(p=>p.update(dt, this.speedMultiplier));
+            this.packets.filter(p=>p.arrived).forEach(p=>p.end.receive(p));
+            this.packets=this.packets.filter(p=>!p.arrived);
+
+            // Source Logic
+            this.sourceTimer -= dt * this.speedMultiplier;
+            if (this.sourceTimer <= 0) {
+                this.sourceTimer = 800; 
+                let active = false;
+                this.nodes.filter(n=>n.type==='SOURCE').forEach(s => {
+                    const links = s.outputs[0];
+                    links.forEach(link => {
+                        if(s.queue.length > 0) { 
+                            active=true; 
+                            const item=s.queue.shift(); 
+                            game.packets.push(new Packet(item.colorKey, item.shape, s, link.node, 0, link.inIdx));
+                            AudioSys.playTone('spawn'); 
+                        }
+                    });
+                });
+                
+                const hasPackets = this.packets.length > 0;
+                const hasQueue = this.nodes.some(n => n.inputBuffer && n.inputBuffer.length > 0);
+                const sourcesEmpty = this.nodes.filter(n=>n.type==='SOURCE').every(s=>s.queue.length===0);
+
+                if(sourcesEmpty && !active && !hasPackets && !hasQueue) { setTimeout(()=>this.checkResult(), 1500); }
+            }
         }
-        this.effects.forEach(e => {e.y-=0.5; e.life--;}); this.effects = this.effects.filter(e=>e.life>0);
-        this.particles.forEach(p => {p.x+=p.vx; p.y+=p.vy; p.life--; p.size*=0.95;}); this.particles = this.particles.filter(p=>p.life>0);
+        this.effects.forEach(e=>{e.y-=0.5;e.life--;}); this.effects=this.effects.filter(e=>e.life>0);
+        this.particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--;p.size*=0.95;}); this.particles=this.particles.filter(p=>p.life>0);
+        
+        const tooltip = document.getElementById('tooltip');
+        if(this.mouse) {
+             const worldPos = this.screenToWorld(this.mouse.x, this.mouse.y);
+             let hovered = false;
+             for(let i=this.nodes.length-1; i>=0; i--) {
+                const n = this.nodes[i];
+                if(worldPos.x >= n.x && worldPos.x <= n.x+n.w && worldPos.y >= n.y && worldPos.y <= n.y+n.h) {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (this.mouse.x + 15) + 'px';
+                    tooltip.style.top = (this.mouse.y + 15) + 'px';
+                    
+                    let txt = NODE_TYPES[n.type] ? NODE_TYPES[n.type].desc : n.name;
+                    if(n.type==='FILTER' || n.type==='SHAPE_SORTER' || n.type==='PERCEPTRON') {
+                         txt += `\nTarget: ${n.props.filterColor || n.props.targetShape || n.props.targetColor}`;
+                         txt += "\n(Click to Change)";
+                    }
+                    if(n.type==='PERCEPTRON') {
+                        txt += `\nTraining: ${Math.floor(n.state.accuracy*100)}%`;
+                    }
+                    tooltip.innerText = txt;
+                    hovered = true;
+                    break;
+                }
+             }
+             if(!hovered) tooltip.style.display = 'none';
+        }
     },
+    
+    screenToWorld(sx, sy) { return { x: (sx - this.camera.x) / this.camera.zoom, y: (sy - this.camera.y) / this.camera.zoom }; },
+    worldToScreen(wx, wy) { return { x: wx * this.camera.zoom + this.camera.x, y: wy * this.camera.zoom + this.camera.y }; },
+
     draw() {
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.save();
+        ctx.translate(this.camera.x, this.camera.y);
+        ctx.scale(this.camera.zoom, this.camera.zoom);
         
+        const gridSize = 40;
+        const left = -this.camera.x / this.camera.zoom;
+        const top = -this.camera.y / this.camera.zoom;
+        const right = left + this.canvas.width / this.camera.zoom;
+        const bottom = top + this.canvas.height / this.camera.zoom;
+        
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (let x = Math.floor(left / gridSize) * gridSize; x <= right; x += gridSize) { ctx.moveTo(x, top); ctx.lineTo(x, bottom); }
+        for (let y = Math.floor(top / gridSize) * gridSize; y <= bottom; y += gridSize) { ctx.moveTo(left, y); ctx.lineTo(right, y); }
+        ctx.stroke();
+
         this.nodes.forEach(n => {
-            n.outputs.forEach((l,i) => {
-                if(l) {
-                    const s = n.getOutPos(i); const e = l.node.getInPos(l.inIdx);
-                    ctx.beginPath(); ctx.moveTo(s.x, s.y);
-                    const cp1x = s.x + Math.abs(e.x-s.x)*0.5;
-                    ctx.bezierCurveTo(cp1x, s.y, cp1x, e.y, e.x, e.y);
-                    ctx.strokeStyle='#555'; ctx.lineWidth=3; ctx.stroke();
-                }
+            n.outputs.forEach((links,i) => {
+                links.forEach(l => {
+                    if(l) {
+                        const s = n.getOutPos(i); const e = l.node.getInPos(l.inIdx);
+                        ctx.beginPath(); ctx.moveTo(s.x, s.y);
+                        const cp1x = s.x + Math.abs(e.x-s.x)*0.5;
+                        ctx.bezierCurveTo(cp1x, s.y, cp1x, e.y, e.x, e.y);
+                        ctx.strokeStyle='#555'; ctx.lineWidth=3; ctx.stroke();
+                    }
+                });
             });
         });
         if(this.wireStart) {
             const s=this.wireStart.node.getOutPos(this.wireStart.idx);
-            ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(this.mouse.x,this.mouse.y);
+            const m = this.screenToWorld(this.mouse.x, this.mouse.y);
+            ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(m.x, m.y);
             ctx.strokeStyle='#fff'; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
         }
 
         this.nodes.forEach(n => n.draw(ctx));
         this.packets.forEach(p => p.draw(ctx));
-        
-        this.particles.forEach(p => {
-            ctx.globalAlpha = p.life/p.maxLife; ctx.fillStyle=p.color; 
-            ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1.0;
-        });
-        
-        this.effects.forEach(e => {
-            ctx.globalAlpha = e.life/60; ctx.fillStyle=e.color; ctx.font='bold 14px Consolas';
-            ctx.fillText(e.text, e.x, e.y); ctx.globalAlpha=1.0;
-        });
+        this.particles.forEach(p => { ctx.globalAlpha = p.life/p.max; ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1.0; });
+        this.effects.forEach(e => { ctx.globalAlpha = e.life/60; ctx.fillStyle=e.color; ctx.font='bold 14px Consolas'; ctx.fillText(e.text, e.x, e.y); ctx.globalAlpha=1.0; });
+        ctx.restore();
     },
 
     setupInput() {
         const cvs = this.canvas;
         let dragNode = null;
+        let isDragging = false; 
 
-        cvs.addEventListener('mousedown', e => {
-            if(e.button !== 0) return;
-            if(this.isRunning) return;
-            const mx=e.offsetX, my=e.offsetY;
-            AudioSys.init(); 
+        const handleStart = (clientX, clientY) => {
+            const rect = cvs.getBoundingClientRect();
+            const mx = clientX - rect.left;
+            const my = clientY - rect.top;
+            const worldPos = this.screenToWorld(mx, my);
+            AudioSys.init();
+            
+            isDragging = false;
+
+            if(this.isRunning) {
+                this.isPanning = true; this.panStart = { x: mx, y: my };
+                return;
+            }
 
             for(let n of this.nodes) {
                 for(let i=0; i<n.outputs.length; i++) {
                     const p = n.getOutPos(i);
-                    if(Math.hypot(p.x-mx, p.y-my) < 12) {
-                        this.wireStart = { node:n, idx:i }; return;
+                    if(Math.hypot(p.x - worldPos.x, p.y - worldPos.y) < 20) {
+                        this.wireStart = { node:n, idx:i }; 
+                        return;
                     }
                 }
             }
             for(let i=this.nodes.length-1; i>=0; i--) {
                 const n = this.nodes[i];
-                if(mx >= n.x && mx <= n.x+n.w && my >= n.y && my <= n.y+n.h) {
+                if(worldPos.x >= n.x && worldPos.x <= n.x+n.w && worldPos.y >= n.y && worldPos.y <= n.y+n.h) {
                     dragNode = n; return;
                 }
             }
-        });
+            this.isPanning = true; this.panStart = { x: mx, y: my };
+        };
 
-        cvs.addEventListener('mousemove', e => {
-            this.mouse.x = e.offsetX; this.mouse.y = e.offsetY;
-            if(dragNode) { dragNode.x = e.offsetX - dragNode.w/2; dragNode.y = e.offsetY - dragNode.h/2; }
-        });
+        const handleMove = (clientX, clientY) => {
+            const rect = cvs.getBoundingClientRect();
+            const mx = clientX - rect.left;
+            const my = clientY - rect.top;
+            this.mouse = { x: mx, y: my };
+            const worldPos = this.screenToWorld(mx, my);
 
-        cvs.addEventListener('mouseup', e => {
+            if (this.isPanning) {
+                const dx = mx - this.panStart.x;
+                const dy = my - this.panStart.y;
+                if(Math.abs(dx)>2 || Math.abs(dy)>2) isDragging = true;
+                this.camera.x += dx;
+                this.camera.y += dy;
+                this.panStart = { x: mx, y: my };
+            } else if (dragNode) {
+                isDragging = true;
+                dragNode.x = worldPos.x - dragNode.w/2;
+                dragNode.y = worldPos.y - dragNode.h/2;
+            }
+        };
+
+        const handleEnd = (clientX, clientY) => {
             if(this.wireStart) {
-                const mx=e.offsetX, my=e.offsetY;
+                const rect = cvs.getBoundingClientRect();
+                const mx = clientX - rect.left;
+                const my = clientY - rect.top;
+                const worldPos = this.screenToWorld(mx, my);
+                
                 for(let n of this.nodes) {
                     for(let i=0; i<n.inputs.length; i++) {
                         const p = n.getInPos(i);
-                        if(Math.hypot(p.x-mx, p.y-my) < 15) {
-                            if(n !== this.wireStart.node) {
-                                this.wireStart.node.outputs[this.wireStart.idx] = { node:n, inIdx:i };
+                        if(Math.hypot(p.x - worldPos.x, p.y - worldPos.y) < 20) {
+                            // Connection Validator
+                            let isOccupied = false;
+                            if(n.type !== 'OUTPUT' && n.type !== 'TRASH') {
+                                for(let otherNode of this.nodes) {
+                                    otherNode.outputs.forEach(links => {
+                                        if(links.some(l => l.node === n && l.inIdx === i)) isOccupied = true;
+                                    });
+                                }
+                            }
+
+                            if(!isOccupied && n !== this.wireStart.node) {
+                                this.wireStart.node.outputs[this.wireStart.idx].push({ node:n, inIdx:i });
                                 AudioSys.playTone('click');
+                            } else {
+                                AudioSys.playTone('fail');
                             }
                         }
                     }
                 }
                 this.wireStart = null;
             }
+            else if (dragNode && !isDragging) {
+                if(dragNode.type === 'FILTER' || dragNode.type === 'SHAPE_SORTER' || dragNode.type === 'PERCEPTRON') {
+                    dragNode.toggleConfig();
+                    AudioSys.playTone('click');
+                }
+            }
             dragNode = null;
+            this.isPanning = false;
+            this.lastPinchDist = 0;
+        };
+
+        cvs.addEventListener('mousedown', e => { if(e.button===0) handleStart(e.clientX, e.clientY); });
+        cvs.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+        cvs.addEventListener('mouseup', e => handleEnd(e.clientX, e.clientY));
+
+        cvs.addEventListener('touchstart', e => {
+            if(e.touches.length === 1) {
+                handleStart(e.touches[0].clientX, e.touches[0].clientY);
+            } else if (e.touches.length === 2) {
+                this.isPanning = false; dragNode = null; this.wireStart = null; 
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                this.lastPinchDist = Math.hypot(dx, dy);
+            }
+        }, {passive: false});
+
+        cvs.addEventListener('touchmove', e => {
+            if(e.touches.length === 1) {
+                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            } else if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy);
+                
+                if (this.lastPinchDist > 0) {
+                    const zoomFactor = dist / this.lastPinchDist;
+                    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    const rect = cvs.getBoundingClientRect();
+                    const mx = cx - rect.left;
+                    const my = cy - rect.top;
+
+                    const worldPosBefore = this.screenToWorld(mx, my);
+                    this.camera.zoom *= zoomFactor;
+                    this.camera.zoom = Math.max(0.2, Math.min(3, this.camera.zoom));
+                    const worldPosAfter = this.screenToWorld(mx, my);
+                    this.camera.x += (worldPosAfter.x - worldPosBefore.x) * this.camera.zoom;
+                    this.camera.y += (worldPosAfter.y - worldPosBefore.y) * this.camera.zoom;
+                }
+                this.lastPinchDist = dist;
+            }
+            e.preventDefault(); 
+        }, {passive: false});
+
+        cvs.addEventListener('touchend', e => {
+            const touch = e.changedTouches[0];
+            handleEnd(touch.clientX, touch.clientY);
+        });
+
+        cvs.addEventListener('wheel', e => {
+            e.preventDefault();
+            const zoomSensitivity = 0.001;
+            const zoomFactor = Math.exp(e.deltaY * -zoomSensitivity);
+            const mx = e.offsetX, my = e.offsetY;
+            const worldPosBefore = this.screenToWorld(mx, my);
+            this.camera.zoom *= zoomFactor;
+            this.camera.zoom = Math.max(0.1, Math.min(5, this.camera.zoom));
+            const worldPosAfter = this.screenToWorld(mx, my);
+            this.camera.x += (worldPosAfter.x - worldPosBefore.x) * this.camera.zoom;
+            this.camera.y += (worldPosAfter.y - worldPosBefore.y) * this.camera.zoom;
         });
 
         cvs.addEventListener('contextmenu', e => {
             e.preventDefault();
             if(this.isRunning) return;
-            const mx=e.offsetX, my=e.offsetY;
+            const mx = e.offsetX, my = e.offsetY;
+            const worldPos = this.screenToWorld(mx, my);
             for(let i=this.nodes.length-1; i>=0; i--) {
                 const n = this.nodes[i];
-                if(mx >= n.x && mx <= n.x+n.w && my >= n.y && my <= n.y+n.h) {
+                if(worldPos.x >= n.x && worldPos.x <= n.x+n.w && worldPos.y >= n.y && worldPos.y <= n.y+n.h) {
                     this.sellNode(n); return;
                 }
             }
         });
     }
 };
-
-class Particle {
-    constructor(x, y, color) {
-        this.x=x; this.y=y; this.color=color;
-        const a = Math.random()*Math.PI*2; const s = Math.random()*2+1;
-        this.vx=Math.cos(a)*s; this.vy=Math.sin(a)*s;
-        this.life=30+Math.random()*20; this.maxLife=this.life; this.size=Math.random()*3+2;
-    }
-}
 
 game.init();
 </script>
